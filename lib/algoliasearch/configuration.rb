@@ -23,7 +23,7 @@ module AlgoliaSearch
     end
 
     def setup_client
-      @client = Algolia::Search::Client.create_with_config(Algolia::Search::Config.new(@@configuration))
+      @client = Typesense::Client.new(@@configuration)
     end
   end
 end

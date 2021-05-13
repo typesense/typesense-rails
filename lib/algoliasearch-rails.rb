@@ -1,4 +1,5 @@
 require 'algolia'
+require 'typesense'
 
 require 'algoliasearch/version'
 require 'algoliasearch/utilities'
@@ -289,7 +290,7 @@ module AlgoliaSearch
   # are correctly logged or thrown depending on the `raise_on_failure` option
   class SafeIndex
     def initialize(name, raise_on_failure)
-      @index = AlgoliaSearch.client.init_index(name)
+      # @index = AlgoliaSearch.client.init_index(name)
       @raise_on_failure = raise_on_failure.nil? || raise_on_failure
     end
 
@@ -492,10 +493,19 @@ module AlgoliaSearch
     end
 
     def algolia_reindex!(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE, synchronous = false)
+      typesense_client = AlgoliaSearch.client
+      collection_name = algolia_index_name
+
+      typesense_client.collections.create(
+        { "name" => collection_name,
+          "fields" => [{"name" => ".*", "type" => "auto" }]
+        }
+      )
+
       return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
-        index = algolia_ensure_init(options, settings)
+        # index = algolia_ensure_init(options, settings)
         next if options[:replica]
         last_task = nil
 
@@ -503,7 +513,7 @@ module AlgoliaSearch
           if algolia_conditional_index?(options)
             # delete non-indexable objects
             ids = group.select { |o| !algolia_indexable?(o, options) }.map { |o| algolia_object_id_of(o, options) }
-            index.delete_objects(ids.select { |id| !id.blank? })
+            # index.delete_objects(ids.select { |id| !id.blank? })
             # select only indexable objects
             group = group.select { |o| algolia_indexable?(o, options) }
           end
@@ -514,7 +524,7 @@ module AlgoliaSearch
             end
             attributes.merge 'objectID' => algolia_object_id_of(o, options)
           end
-          last_task = index.save_objects(objects)
+          last_task = typesense_client.collections[collection_name].documents.import(objects)
         end
         index.wait_task(last_task.raw_response["taskID"]) if last_task and (synchronous || options[:synchronous])
       end
@@ -567,6 +577,7 @@ module AlgoliaSearch
     end
 
     def algolia_set_settings(synchronous = false)
+      return
       algolia_configurations.each do |options, settings|
         if options[:primary_settings] && options[:inherit]
           primary = options[:primary_settings].to_settings
@@ -594,6 +605,18 @@ module AlgoliaSearch
     end
 
     def algolia_index!(object, synchronous = false)
+      typesense_client = AlgoliaSearch.client
+      collection_name = algolia_index_name
+
+      begin
+        typesense_client.collections.create(
+          { "name" => collection_name,
+            "fields" => [{"name" => ".*", "type" => "auto" }]
+          }
+        )
+      rescue Typesense::Error::ObjectAlreadyExists => e
+      end
+
       return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
@@ -602,11 +625,7 @@ module AlgoliaSearch
         next if options[:replica]
         if algolia_indexable?(object, options)
           raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
-          if synchronous || options[:synchronous]
-            index.save_object!(settings.get_attributes(object).merge 'objectID' => algolia_object_id_of(object, options))
-          else
-            index.save_object(settings.get_attributes(object).merge 'objectID' => algolia_object_id_of(object, options))
-          end
+          typesense_client.collections[collection_name].documents.upsert(settings.get_attributes(object).merge 'id' => algolia_object_id_of(object, options))
         elsif algolia_conditional_index?(options) && !object_id.blank?
           # remove non-indexable objects
           if synchronous || options[:synchronous]
@@ -795,7 +814,7 @@ module AlgoliaSearch
         replicas = index_settings.delete(:replicas) ||
                    index_settings.delete('replicas')
         index_settings[:replicas] = replicas unless replicas.nil? || options[:inherit]
-        @algolia_indexes[settings].set_settings!(index_settings)
+        # @algolia_indexes[settings].set_settings!(index_settings)
       end
 
       @algolia_indexes[settings]
