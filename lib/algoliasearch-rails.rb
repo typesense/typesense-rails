@@ -1,32 +1,31 @@
-require 'algolia'
+require "algolia"
 #reuire typesense
-require 'typesense'
-require 'algoliasearch/version'
-require 'algoliasearch/utilities'
+require "typesense"
+require "algoliasearch/version"
+require "algoliasearch/utilities"
 
 if defined? Rails
   begin
-    require 'algoliasearch/railtie'
+    require "algoliasearch/railtie"
   rescue LoadError
   end
 end
 
 begin
-  require 'active_job'
+  require "active_job"
 rescue LoadError
   # no queue support, fine
 end
 
-require 'logger'
+require "logger"
 
 module AlgoliaSearch
-
   class NotConfigured < StandardError; end
   class BadConfiguration < StandardError; end
   class NoBlockGiven < StandardError; end
   class MixedSlavesAndReplicas < StandardError; end
 
-  autoload :Configuration, 'algoliasearch/configuration'
+  autoload :Configuration, "algoliasearch/configuration"
   extend Configuration
 
   #autoload :Pagination, 'algoliasearch/pagination'
@@ -44,317 +43,321 @@ module AlgoliaSearch
         include InstanceMethods
       end
     end
-
   end
 
-  # class IndexSettings
-  #   DEFAULT_BATCH_SIZE = 1000
+  class IndexSettings
+    DEFAULT_BATCH_SIZE = 1000
 
-  #   # AlgoliaSearch settings
-  #   OPTIONS = [
-  #     # Attributes
-  #     :searchableAttributes, :attributesForFaceting, :unretrievableAttributes, :attributesToRetrieve,
-  #     # Ranking
-  #     :ranking, :customRanking, # Replicas are handled via `add_replica`
-  #     # Faceting
-  #     :maxValuesPerFacet, :sortFacetValuesBy,
-  #     # Highlighting / Snippeting
-  #     :attributesToHighlight, :attributesToSnippet, :highlightPreTag, :highlightPostTag,
-  #     :snippetEllipsisText, :restrictHighlightAndSnippetArrays,
-  #     # Pagination
-  #     :hitsPerPage, :paginationLimitedTo,
-  #     # Typo
-  #     :minWordSizefor1Typo, :minWordSizefor2Typos, :typoTolerance, :allowTyposOnNumericTokens,
-  #     :disableTypoToleranceOnAttributes, :disableTypoToleranceOnWords, :separatorsToIndex,
-  #     # Language
-  #     :ignorePlurals, :removeStopWords, :camelCaseAttributes, :decompoundedAttributes,
-  #     :keepDiacriticsOnCharacters, :queryLanguages, :indexLanguages,
-  #     # Query Rules
-  #     :enableRules,
-  #     # Query Strategy
-  #     :queryType, :removeWordsIfNoResults, :advancedSyntax, :optionalWords,
-  #     :disablePrefixOnAttributes, :disableExactOnAttributes, :exactOnSingleWordQuery, :alternativesAsExact,
-  #     # Performance
-  #     :numericAttributesForFiltering, :allowCompressionOfIntegerArray,
-  #     # Advanced
-  #     :attributeForDistinct, :distinct, :replaceSynonymsInHighlight, :minProximity, :responseFields,
-  #     :maxFacetHits,
+    # AlgoliaSearch settings
+    OPTIONS = [
+ # # Attributes
+           # :searchableAttributes, :attributesForFaceting, :unretrievableAttributes, :attributesToRetrieve,
+           # # Ranking
+           # :ranking, :customRanking, # Replicas are handled via `add_replica`
+           # # Faceting
+           # :maxValuesPerFacet, :sortFacetValuesBy,
+           # # Highlighting / Snippeting
+           # :attributesToHighlight, :attributesToSnippet, :highlightPreTag, :highlightPostTag,
+           # :snippetEllipsisText, :restrictHighlightAndSnippetArrays,
+           # # Pagination
+           # :hitsPerPage, :paginationLimitedTo,
+           # # Typo
+           # :minWordSizefor1Typo, :minWordSizefor2Typos, :typoTolerance, :allowTyposOnNumericTokens,
+           # :disableTypoToleranceOnAttributes, :disableTypoToleranceOnWords, :separatorsToIndex,
+           # # Language
+           # :ignorePlurals, :removeStopWords, :camelCaseAttributes, :decompoundedAttributes,
+           # :keepDiacriticsOnCharacters, :queryLanguages, :indexLanguages,
+           # # Query Rules
+           # :enableRules,
+           # # Query Strategy
+           # :queryType, :removeWordsIfNoResults, :advancedSyntax, :optionalWords,
+           # :disablePrefixOnAttributes, :disableExactOnAttributes, :exactOnSingleWordQuery, :alternativesAsExact,
+           # # Performance
+           # :numericAttributesForFiltering, :allowCompressionOfIntegerArray,
+           # # Advanced
+           # :attributeForDistinct, :distinct, :replaceSynonymsInHighlight, :minProximity, :responseFields,
+           # :maxFacetHits,
+      
+     # # Rails-specific
+           # :synonyms, :placeholders, :altCorrections,
+      ]
+    OPTIONS.each do |k|
+      define_method k do |v|
+        instance_variable_set("@#{k}", v)
+      end
+    end
 
-  #     # Rails-specific
-  #     :synonyms, :placeholders, :altCorrections,
-  #   ]
-  #   OPTIONS.each do |k|
-  #     define_method k do |v|
-  #       instance_variable_set("@#{k}", v)
-  #     end
-  #   end
+    def initialize(options, &block)
+      @options = options
+      instance_exec(&block) if block_given?
+    end
 
-  # def initialize(options, &block)
-  #     @options = options
-  #     instance_exec(&block) if block_given?
-  #    end
+    def use_serializer(serializer)
+      @serializer = serializer
+      # instance_variable_set("@serializer", serializer)
+    end
 
-  #   def use_serializer(serializer)
-  #     @serializer = serializer
-  #     # instance_variable_set("@serializer", serializer)
-  #   end
+    def attribute(*names, &block)
+      raise ArgumentError.new("Cannot pass multiple attribute names if block given") if block_given? and names.length > 1
+      raise ArgumentError.new("Cannot specify additional attributes on a replica index") if @options[:replica]
+      @attributes ||= {}
+      names.flatten.each do |name|
+        @attributes[name.to_s] = block_given? ? Proc.new { |o| o.instance_eval(&block) } : Proc.new { |o| o.send(name) }
+      end
+    end
 
-  #   def attribute(*names, &block)
-  #     raise ArgumentError.new('Cannot pass multiple attribute names if block given') if block_given? and names.length > 1
-  #     raise ArgumentError.new('Cannot specify additional attributes on a replica index') if @options[:replica]
-  #     @attributes ||= {}
-  #     names.flatten.each do |name|
-  #       @attributes[name.to_s] = block_given? ? Proc.new { |o| o.instance_eval(&block) } : Proc.new { |o| o.send(name) }
-  #     end
-  #   end
-  #   alias :attributes :attribute
+    alias :attributes :attribute
 
-  #   def add_attribute(*names, &block)
-  #     raise ArgumentError.new('Cannot pass multiple attribute names if block given') if block_given? and names.length > 1
-  #     raise ArgumentError.new('Cannot specify additional attributes on a replica index') if @options[:replica]
-  #     @additional_attributes ||= {}
-  #     names.each do |name|
-  #       @additional_attributes[name.to_s] = block_given? ? Proc.new { |o| o.instance_eval(&block) } : Proc.new { |o| o.send(name) }
-  #     end
-  #   end
-  #   alias :add_attributes :add_attribute
+    def add_attribute(*names, &block)
+      raise ArgumentError.new("Cannot pass multiple attribute names if block given") if block_given? and names.length > 1
+      raise ArgumentError.new("Cannot specify additional attributes on a replica index") if @options[:replica]
+      @additional_attributes ||= {}
+      names.each do |name|
+        @additional_attributes[name.to_s] = block_given? ? Proc.new { |o| o.instance_eval(&block) } : Proc.new { |o| o.send(name) }
+      end
+    end
 
-  #   def is_mongoid?(object)
-  #     defined?(::Mongoid::Document) && object.class.include?(::Mongoid::Document)
-  #   end
+    alias :add_attributes :add_attribute
 
-  #   def is_sequel?(object)
-  #     defined?(::Sequel) && object.class < ::Sequel::Model
-  #   end
+    def is_mongoid?(object)
+      defined?(::Mongoid::Document) && object.class.include?(::Mongoid::Document)
+    end
 
-  #   def is_active_record?(object)
-  #     !is_mongoid?(object) && !is_sequel?(object)
-  #   end
+    def is_sequel?(object)
+      defined?(::Sequel) && object.class < ::Sequel::Model
+    end
 
-  #   def get_default_attributes(object)
-  #     if is_mongoid?(object)
-  #       # work-around mongoid 2.4's unscoped method, not accepting a block
-  #       object.attributes
-  #     elsif is_sequel?(object)
-  #       object.to_hash
-  #     else
-  #       object.class.unscoped do
-  #         object.attributes
-  #       end
-  #     end
-  #   end
+    def is_active_record?(object)
+      !is_mongoid?(object) && !is_sequel?(object)
+    end
 
-  #   def get_attribute_names(object)
-  #     get_attributes(object).keys
-  #   end
+    def get_default_attributes(object)
+      if is_mongoid?(object)
+        # work-around mongoid 2.4's unscoped method, not accepting a block
+        object.attributes
+      elsif is_sequel?(object)
+        object.to_hash
+      else
+        object.class.unscoped do
+          object.attributes
+        end
+      end
+    end
 
-  #   def attributes_to_hash(attributes, object)
-  #     if attributes
-  #       Hash[attributes.map { |name, value| [name.to_s, value.call(object) ] }]
-  #     else
-  #       {}
-  #     end
-  #   end
+    def get_attribute_names(object)
+      get_attributes(object).keys
+    end
 
-  #   def get_attributes(object)
-  #     # If a serializer is set, we ignore attributes
-  #     # everything should be done via the serializer
-  #     if not @serializer.nil?
-  #       attributes = @serializer.new(object).attributes
-  #     else
-  #       if @attributes.nil? || @attributes.length == 0
-  #         # no `attribute ...` have been configured, use the default attributes of the model
-  #         attributes = get_default_attributes(object)
-  #       else
-  #         # at least 1 `attribute ...` has been configured, therefore use ONLY the one configured
-  #         if is_active_record?(object)
-  #           object.class.unscoped do
-  #             attributes = attributes_to_hash(@attributes, object)
-  #           end
-  #         else
-  #           attributes = attributes_to_hash(@attributes, object)
-  #         end
-  #       end
-  #     end
+    def attributes_to_hash(attributes, object)
+      if attributes
+        Hash[attributes.map { |name, value| [name.to_s, value.call(object)] }]
+      else
+        {}
+      end
+    end
 
-  #     attributes.merge!(attributes_to_hash(@additional_attributes, object)) if @additional_attributes
+    def get_attributes(object)
+      # If a serializer is set, we ignore attributes
+      # everything should be done via the serializer
+      if not @serializer.nil?
+        attributes = @serializer.new(object).attributes
+      else
+        if @attributes.nil? || @attributes.length == 0
+          # no `attribute ...` have been configured, use the default attributes of the model
+          attributes = get_default_attributes(object)
+        else
+          # at least 1 `attribute ...` has been configured, therefore use ONLY the one configured
+          if is_active_record?(object)
+            object.class.unscoped do
+              attributes = attributes_to_hash(@attributes, object)
+            end
+          else
+            attributes = attributes_to_hash(@attributes, object)
+          end
+        end
+      end
 
-  #     if @options[:sanitize]
-  #       sanitizer = begin
-  #         ::HTML::FullSanitizer.new
-  #       rescue NameError
-  #         # from rails 4.2
-  #         ::Rails::Html::FullSanitizer.new
-  #       end
-  #       attributes = sanitize_attributes(attributes, sanitizer)
-  #     end
+      attributes.merge!(attributes_to_hash(@additional_attributes, object)) if @additional_attributes
 
-  #     if @options[:force_utf8_encoding] && Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f > 1.8
-  #       attributes = encode_attributes(attributes)
-  #     end
+      if @options[:sanitize]
+        sanitizer = begin
+            ::HTML::FullSanitizer.new
+          rescue NameError
+            # from rails 4.2
+            ::Rails::Html::FullSanitizer.new
+          end
+        attributes = sanitize_attributes(attributes, sanitizer)
+      end
 
-  #     attributes
-  #   end
+      if @options[:force_utf8_encoding] && Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f > 1.8
+        attributes = encode_attributes(attributes)
+      end
 
-  #   def sanitize_attributes(v, sanitizer)
-  #     case v
-  #     when String
-  #       sanitizer.sanitize(v)
-  #     when Hash
-  #       v.each { |key, value| v[key] = sanitize_attributes(value, sanitizer) }
-  #     when Array
-  #       v.map { |x| sanitize_attributes(x, sanitizer) }
-  #     else
-  #       v
-  #     end
-  #   end
+      attributes
+    end
 
-  #   def encode_attributes(v)
-  #     case v
-  #     when String
-  #       v.force_encoding('utf-8')
-  #     when Hash
-  #       v.each { |key, value| v[key] = encode_attributes(value) }
-  #     when Array
-  #       v.map { |x| encode_attributes(x) }
-  #     else
-  #       v
-  #     end
-  #   end
+    def sanitize_attributes(v, sanitizer)
+      case v
+      when String
+        sanitizer.sanitize(v)
+      when Hash
+        v.each { |key, value| v[key] = sanitize_attributes(value, sanitizer) }
+      when Array
+        v.map { |x| sanitize_attributes(x, sanitizer) }
+      else
+        v
+      end
+    end
 
-  #   def geoloc(lat_attr = nil, lng_attr = nil, &block)
-  #     raise ArgumentError.new('Cannot specify additional attributes on a replica index') if @options[:replica]
-  #     add_attribute :_geoloc do |o|
-  #       block_given? ? o.instance_eval(&block) : { :lat => o.send(lat_attr).to_f, :lng => o.send(lng_attr).to_f }
-  #     end
-  #   end
+    def encode_attributes(v)
+      case v
+      when String
+        v.force_encoding("utf-8")
+      when Hash
+        v.each { |key, value| v[key] = encode_attributes(value) }
+      when Array
+        v.map { |x| encode_attributes(x) }
+      else
+        v
+      end
+    end
 
-  #   def tags(*args, &block)
-  #     raise ArgumentError.new('Cannot specify additional attributes on a replica index') if @options[:replica]
-  #     add_attribute :_tags do |o|
-  #       v = block_given? ? o.instance_eval(&block) : args
-  #       v.is_a?(Array) ? v : [v]
-  #     end
-  #   end
+    def geoloc(lat_attr = nil, lng_attr = nil, &block)
+      raise ArgumentError.new("Cannot specify additional attributes on a replica index") if @options[:replica]
+      add_attribute :_geoloc do |o|
+        block_given? ? o.instance_eval(&block) : { :lat => o.send(lat_attr).to_f, :lng => o.send(lng_attr).to_f }
+      end
+    end
 
-  #   def get_setting(name)
-  #     instance_variable_get("@#{name}")
-  #   end
+    def tags(*args, &block)
+      raise ArgumentError.new("Cannot specify additional attributes on a replica index") if @options[:replica]
+      add_attribute :_tags do |o|
+        v = block_given? ? o.instance_eval(&block) : args
+        v.is_a?(Array) ? v : [v]
+      end
+    end
 
-  #   def to_settings
-  #     settings = {}
-  #     OPTIONS.each do |k|
-  #       v = get_setting(k)
-  #       settings[k] = v if !v.nil?
-  #     end
-  #     if !@options[:replica]
-  #       settings[:replicas] = additional_indexes.select { |opts, s| opts[:replica] }.map do |opts, s|
-  #         name = opts[:index_name]
-  #         name = "#{name}_#{Rails.env.to_s}" if opts[:per_environment]
-  #         name
-  #       end
-  #       settings.delete(:replicas) if settings[:replicas].empty?
-  #     end
-  #     settings
-  #   end
+    def get_setting(name)
+      instance_variable_get("@#{name}")
+    end
 
-  #   def add_index(index_name, options = {}, &block)
-  #     raise ArgumentError.new('Cannot specify additional index on a replica index') if @options[:replica]
-  #     raise ArgumentError.new('No block given') if !block_given?
-  #     raise ArgumentError.new('Options auto_index and auto_remove cannot be set on nested indexes') if options[:auto_index] || options[:auto_remove]
-  #     @additional_indexes ||= {}
-  #     options[:index_name] = index_name
-  #     @additional_indexes[options] = IndexSettings.new(options, &block)
-  #   end
+    def to_settings
+      settings = {}
+      OPTIONS.each do |k|
+        v = get_setting(k)
+        settings[k] = v if !v.nil?
+      end
+      if !@options[:replica]
+        settings[:replicas] = additional_indexes.select { |opts, s| opts[:replica] }.map do |opts, s|
+          name = opts[:index_name]
+          name = "#{name}_#{Rails.env.to_s}" if opts[:per_environment]
+          name
+        end
+        settings.delete(:replicas) if settings[:replicas].empty?
+      end
+      settings
+    end
 
-  #   def add_replica(index_name, options = {}, &block)
-  #     raise ArgumentError.new('Cannot specify additional replicas on a replica index') if @options[:replica]
-  #     raise ArgumentError.new('No block given') if !block_given?
-  #     add_index(index_name, options.merge({ :replica => true, :primary_settings => self }), &block)
-  #   end
+    def add_index(index_name, options = {}, &block)
+      raise ArgumentError.new("Cannot specify additional index on a replica index") if @options[:replica]
+      raise ArgumentError.new("No block given") if !block_given?
+      raise ArgumentError.new("Options auto_index and auto_remove cannot be set on nested indexes") if options[:auto_index] || options[:auto_remove]
+      @additional_indexes ||= {}
+      options[:index_name] = index_name
+      @additional_indexes[options] = IndexSettings.new(options, &block)
+    end
 
-  #   def additional_indexes
-  #     @additional_indexes || {}
-  #   end
-  # end
+    def add_replica(index_name, options = {}, &block)
+      raise ArgumentError.new("Cannot specify additional replicas on a replica index") if @options[:replica]
+      raise ArgumentError.new("No block given") if !block_given?
+      add_index(index_name, options.merge({ :replica => true, :primary_settings => self }), &block)
+    end
 
-  # Default queueing system
+    def additional_indexes
+      @additional_indexes || {}
+    end
+  end
+
+  #Default queueing system
   if defined?(::ActiveJob::Base)
-    # lazy load the ActiveJob class to ensure the
-    # queue is initialized before using it
-    # see https://github.com/algolia/algoliasearch-rails/issues/69
-    autoload :AlgoliaJob, 'algoliasearch/algolia_job'
+    #lazy load the ActiveJob class to ensure the
+    #queue is initialized before using it
+    #see https://github.com/algolia/algoliasearch-rails/issues/69
+    autoload :AlgoliaJob, "algoliasearch/algolia_job"
   end
 
-  # this class wraps an Algolia::Index object ensuring all raised exceptions
-  # are correctly logged or thrown depending on the `raise_on_failure` option
-  # class SafeIndex
-  #   def initialize(name, raise_on_failure)
-  #     @index = AlgoliaSearch.client.init_index(name)
-  #     @raise_on_failure = raise_on_failure.nil? || raise_on_failure
-  #   end
+  #this class wraps an Algolia::Index object ensuring all raised exceptions
+  #are correctly logged or thrown depending on the `raise_on_failure` option
+  class SafeIndex
+    def initialize(name, raise_on_failure)
+      #@index = AlgoliaSearch.client.init_index(name)
+      @index = Typesense.client.collections.create(
+        { "name" => name,
+          "fields" => [{ "name" => ".*", "type" => "auto" }] }
+      )
+      @raise_on_failure = raise_on_failure.nil? || raise_on_failure
+    end
 
-  #   ::Algolia::Search::Index.instance_methods(false).each do |m|
-  #     define_method(m) do |*args, &block|
-  #       SafeIndex.log_or_throw(m, @raise_on_failure) do
-  #         @index.send(m, *args, &block)
-  #       end
-  #     end
-  #   end
+    # ::Algolia::Search::Index.instance_methods(false).each do |m|
+    #   define_method(m) do |*args, &block|
+    #     SafeIndex.log_or_throw(m, @raise_on_failure) do
+    #       @index.send(m, *args, &block)
+    #     end
+    #   end
+    # end
 
-  #   # special handling of wait_task to handle null task_id
-  #   def wait_task(task_id)
-  #     return if task_id.nil? && !@raise_on_failure # ok
-  #     SafeIndex.log_or_throw(:wait_task, @raise_on_failure) do
-  #       @index.wait_task(task_id)
-  #     end
-  #   end
+    # # special handling of wait_task to handle null task_id
+    # def wait_task(task_id)
+    #   return if task_id.nil? && !@raise_on_failure # ok
+    #   SafeIndex.log_or_throw(:wait_task, @raise_on_failure) do
+    #     @index.wait_task(task_id)
+    #   end
+    # end
 
-  #   # special handling of get_settings to avoid raising errors on 404
-  #    def get_settings(*args)
-  #      SafeIndex.log_or_throw(:get_settings, @raise_on_failure) do
-  #        begin
-  #          @index.get_settings(*args)
-  #        rescue Algolia::AlgoliaHttpError => e
-  #          return {} if e.code == 404 # not fatal
-  #          raise e
-  #        end
-  #      end
-  #    end
+    # # special handling of get_settings to avoid raising errors on 404
+    #  def get_settings(*args)
+    #    SafeIndex.log_or_throw(:get_settings, @raise_on_failure) do
+    #      begin
+    #        @index.get_settings(*args)
+    #      rescue Algolia::AlgoliaHttpError => e
+    #        return {} if e.code == 404 # not fatal
+    #        raise e
+    #      end
+    #    end
+    #  end
 
-  #   # expose move as well
-  #   def self.move_index(old_name, new_name)
-  #     SafeIndex.log_or_throw(:move_index, true) do
-  #       AlgoliaSearch.client.move_index(old_name, new_name)
-  #     end
-  #   end
+    # # expose move as well
+    # def self.move_index(old_name, new_name)
+    #   SafeIndex.log_or_throw(:move_index, true) do
+    #     AlgoliaSearch.client.move_index(old_name, new_name)
+    #   end
+    # end
 
-  #   private
-  #   def self.log_or_throw(method, raise_on_failure, &block)
-  #     begin
-  #       yield
-  #   rescue Algolia::AlgoliaError => e
-  #       raise e if raise_on_failure
-  #       # log the error
-  #       (Rails.logger || Logger.new(STDOUT)).error("[algoliasearch-rails] #{e.message}")
-  #       # return something
-  #       case method.to_s
-  #       when 'search'
-  #         # some attributes are required
-  #         { 'hits' => [], 'hitsPerPage' => 0, 'page' => 0, 'facets' => {}, 'error' => e }
-  #       else
-  #         # empty answer
-  #         { 'error' => e }
-  #       end
-  #     end
-  #   end
-  # end
+    # private
+    # def self.log_or_throw(method, raise_on_failure, &block)
+    #   begin
+    #     yield
+    # rescue Algolia::AlgoliaError => e
+    #     raise e if raise_on_failure
+    #     # log the error
+    #     (Rails.logger || Logger.new(STDOUT)).error("[algoliasearch-rails] #{e.message}")
+    #     # return something
+    #     case method.to_s
+    #     when 'search'
+    #       # some attributes are required
+    #       { 'hits' => [], 'hitsPerPage' => 0, 'page' => 0, 'facets' => {}, 'error' => e }
+    #     else
+    #       # empty answer
+    #       { 'error' => e }
+    #     end
+    #   end
+    # end
+  end
 
   # these are the class methods added when AlgoliaSearch is included
   module ClassMethods
-
     def self.extended(base)
-      class <<base
+      class << base
         alias_method :without_auto_index, :algolia_without_auto_index unless method_defined? :without_auto_index
         alias_method :reindex!, :algolia_reindex! unless method_defined? :reindex!
         alias_method :reindex, :algolia_reindex unless method_defined? :reindex
@@ -397,16 +400,16 @@ module AlgoliaSearch
       if options[:enqueue]
         raise ArgumentError.new("Cannot use a enqueue if the `synchronous` option if set") if options[:synchronous]
         proc = if options[:enqueue] == true
-          Proc.new do |record, remove|
-            AlgoliaJob.perform_later(record, remove ? 'algolia_remove_from_index!' : 'algolia_index!')
+            Proc.new do |record, remove|
+              AlgoliaJob.perform_later(record, remove ? "algolia_remove_from_index!" : "algolia_index!")
+            end
+          elsif options[:enqueue].respond_to?(:call)
+            options[:enqueue]
+          elsif options[:enqueue].is_a?(Symbol)
+            Proc.new { |record, remove| self.send(options[:enqueue], record, remove) }
+          else
+            raise ArgumentError.new("Invalid `enqueue` option: #{options[:enqueue]}")
           end
-        elsif options[:enqueue].respond_to?(:call)
-          options[:enqueue]
-        elsif options[:enqueue].is_a?(Symbol)
-          Proc.new { |record, remove| self.send(options[:enqueue], record, remove) }
-        else
-          raise ArgumentError.new("Invalid `enqueue` option: #{options[:enqueue]}")
-        end
         algoliasearch_options[:enqueue] = Proc.new do |record, remove|
           proc.call(record, remove) unless algolia_without_auto_index_scope
         end
@@ -430,7 +433,7 @@ module AlgoliaSearch
             end
 
             sequel_version = Gem::Version.new(Sequel.version)
-            if sequel_version >= Gem::Version.new('4.0.0') && sequel_version < Gem::Version.new('5.0.0')
+            if sequel_version >= Gem::Version.new("4.0.0") && sequel_version < Gem::Version.new("5.0.0")
               copy_after_commit = instance_method(:after_commit)
               define_method(:after_commit) do |*args|
                 super(*args)
@@ -513,7 +516,7 @@ module AlgoliaSearch
             unless attributes.class == Hash
               attributes = attributes.to_hash
             end
-            attributes.merge 'objectID' => algolia_object_id_of(o, options)
+            attributes.merge "objectID" => algolia_object_id_of(o, options)
           end
           last_task = index.save_objects(objects)
         end
@@ -536,7 +539,7 @@ module AlgoliaSearch
 
         # remove the replicas of the temporary index
         master_settings.delete :replicas
-        master_settings.delete 'replicas'
+        master_settings.delete "replicas"
 
         # init temporary index
         src_index_name = algolia_index_name(options)
@@ -552,12 +555,12 @@ module AlgoliaSearch
           tmp_index = algolia_ensure_init(tmp_options, tmp_settings, master_settings)
         end
 
-          algolia_find_in_batches(batch_size) do |group|
+        algolia_find_in_batches(batch_size) do |group|
           if algolia_conditional_index?(options)
             # select only indexable objects
             group = group.select { |o| algolia_indexable?(o, tmp_options) }
           end
-          objects = group.map { |o| tmp_settings.get_attributes(o).merge 'objectID' => algolia_object_id_of(o, tmp_options) }
+          objects = group.map { |o| tmp_settings.get_attributes(o).merge "objectID" => algolia_object_id_of(o, tmp_options) }
           tmp_index.save_objects(objects)
         end
 
@@ -572,7 +575,7 @@ module AlgoliaSearch
         if options[:primary_settings] && options[:inherit]
           primary = options[:primary_settings].to_settings
           primary.delete :replicas
-          primary.delete 'replicas'
+          primary.delete "replicas"
           final_settings = primary.merge(settings.to_settings)
         else
           final_settings = settings.to_settings
@@ -589,7 +592,7 @@ module AlgoliaSearch
         next if algolia_indexing_disabled?(options)
         index = algolia_ensure_init(options, settings)
         next if options[:replica]
-        task = index.save_objects(objects.map { |o| settings.get_attributes(o).merge 'objectID' => algolia_object_id_of(o, options) })
+        task = index.save_objects(objects.map { |o| settings.get_attributes(o).merge "objectID" => algolia_object_id_of(o, options) })
         index.wait_task(task.raw_response["taskID"]) if synchronous || options[:synchronous]
       end
     end
@@ -604,9 +607,9 @@ module AlgoliaSearch
         if algolia_indexable?(object, options)
           raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
           if synchronous || options[:synchronous]
-            index.save_object!(settings.get_attributes(object).merge 'objectID' => algolia_object_id_of(object, options))
+            index.save_object!(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
           else
-            index.save_object(settings.get_attributes(object).merge 'objectID' => algolia_object_id_of(object, options))
+            index.save_object(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
           end
         elsif algolia_conditional_index?(options) && !object_id.blank?
           # remove non-indexable objects
@@ -650,16 +653,16 @@ module AlgoliaSearch
 
     def algolia_raw_search(q, params = {})
       index_name = params.delete(:index) ||
-                   params.delete('index') ||
+                   params.delete("index") ||
                    params.delete(:replica) ||
-                   params.delete('replica')
+                   params.delete("replica")
       index = algolia_index(index_name)
-      index.search(q, Hash[params.map { |k,v| [k.to_s, v.to_s] }])
+      index.search(q, Hash[params.map { |k, v| [k.to_s, v.to_s] }])
     end
 
     module AdditionalMethods
       def self.extended(base)
-        class <<base
+        class << base
           alias_method :raw_answer, :algolia_raw_answer unless method_defined? :raw_answer
           alias_method :facets, :algolia_facets unless method_defined? :facets
         end
@@ -670,10 +673,11 @@ module AlgoliaSearch
       end
 
       def algolia_facets
-        @algolia_json['facets']
+        @algolia_json["facets"]
       end
 
       private
+
       def algolia_init_raw_answer(json)
         @algolia_json = json
       end
@@ -682,11 +686,11 @@ module AlgoliaSearch
     def algolia_search(q, params = {})
       if AlgoliaSearch.configuration[:pagination_backend]
         # kaminari and will_paginate start pagination at 1, Algolia starts at 0
-        params[:page] = (params.delete('page') || params.delete(:page)).to_i
+        params[:page] = (params.delete("page") || params.delete(:page)).to_i
         params[:page] -= 1 if params[:page].to_i > 0
       end
       json = algolia_raw_search(q, params)
-      hit_ids = json['hits'].map { |hit| hit['objectID'] }
+      hit_ids = json["hits"].map { |hit| hit["objectID"] }
       if defined?(::Mongoid::Document) && self.include?(::Mongoid::Document)
         condition_key = algolia_object_id_method.in
       else
@@ -695,18 +699,18 @@ module AlgoliaSearch
       results_by_id = algoliasearch_options[:type].where(condition_key => hit_ids).index_by do |hit|
         algolia_object_id_of(hit)
       end
-      results = json['hits'].map do |hit|
-        o = results_by_id[hit['objectID'].to_s]
+      results = json["hits"].map do |hit|
+        o = results_by_id[hit["objectID"].to_s]
         if o
-          o.highlight_result = hit['_highlightResult']
-          o.snippet_result = hit['_snippetResult']
+          o.highlight_result = hit["_highlightResult"]
+          o.snippet_result = hit["_snippetResult"]
           o
         end
       end.compact
       # Algolia has a default limit of 1000 retrievable hits
-      total_hits = json['nbHits'].to_i < json['nbPages'].to_i * json['hitsPerPage'].to_i ?
-        json['nbHits'].to_i: json['nbPages'].to_i * json['hitsPerPage'].to_i
-      res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json['page'].to_i + 1, :per_page => json['hitsPerPage'] }))
+      total_hits = json["nbHits"].to_i < json["nbPages"].to_i * json["hitsPerPage"].to_i ?
+        json["nbHits"].to_i : json["nbPages"].to_i * json["hitsPerPage"].to_i
+      res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json["page"].to_i + 1, :per_page => json["hitsPerPage"] }))
       res.extend(AdditionalMethods)
       res.send(:algolia_init_raw_answer, json)
       res
@@ -714,12 +718,12 @@ module AlgoliaSearch
 
     def algolia_search_for_facet_values(facet, text, params = {})
       index_name = params.delete(:index) ||
-                   params.delete('index') ||
+                   params.delete("index") ||
                    params.delete(:replica) ||
-                   params.delete('replicas')
+                   params.delete("replicas")
       index = algolia_index(index_name)
       query = Hash[params.map { |k, v| [k.to_s, v.to_s] }]
-      index.search_for_facet_values(facet, text, query)['facetHits']
+      index.search_for_facet_values(facet, text, query)["facetHits"]
     end
 
     # deprecated (renaming)
@@ -737,7 +741,7 @@ module AlgoliaSearch
 
     def algolia_index_name(options = nil)
       options ||= algoliasearch_options
-      name = options[:index_name] || model_name.to_s.gsub('::', '_')
+      name = options[:index_name] || model_name.to_s.gsub("::", "_")
       name = "#{name}_#{Rails.env.to_s}" if options[:per_environment]
       name
     end
@@ -774,7 +778,7 @@ module AlgoliaSearch
     protected
 
     def algolia_ensure_init(options = nil, settings = nil, index_settings = nil)
-      raise ArgumentError.new('No `algoliasearch` block found in your model.') if algoliasearch_settings.nil?
+      raise ArgumentError.new("No `algoliasearch` block found in your model.") if algoliasearch_settings.nil?
 
       @algolia_indexes ||= {}
 
@@ -794,7 +798,7 @@ module AlgoliaSearch
 
       if !algolia_indexing_disabled?(options) && options[:check_settings] && algoliasearch_settings_changed?(current_settings, index_settings)
         replicas = index_settings.delete(:replicas) ||
-                   index_settings.delete('replicas')
+                   index_settings.delete("replicas")
         index_settings[:replicas] = replicas unless replicas.nil? || options[:inherit]
         @algolia_indexes[settings].set_settings!(index_settings)
       end
@@ -805,11 +809,11 @@ module AlgoliaSearch
     private
 
     def algolia_configurations
-      raise ArgumentError.new('No `algoliasearch` block found in your model.') if algoliasearch_settings.nil?
+      raise ArgumentError.new("No `algoliasearch` block found in your model.") if algoliasearch_settings.nil?
       if @configurations.nil?
         @configurations = {}
         @configurations[algoliasearch_options] = algoliasearch_settings
-        algoliasearch_settings.additional_indexes.each do |k,v|
+        algoliasearch_settings.additional_indexes.each do |k, v|
           @configurations[k] = v
 
           if v.additional_indexes.any?
@@ -851,7 +855,7 @@ module AlgoliaSearch
     end
 
     def algolia_full_const_get(name)
-      list = name.split('::')
+      list = name.split("::")
       list.shift if list.first.blank?
       obj = Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9 ? Object : self
       list.each do |x|
@@ -894,7 +898,7 @@ module AlgoliaSearch
 
     def algolia_indexing_disabled?(options = nil)
       options ||= algoliasearch_options
-      constraint = options[:disable_indexing] || options['disable_indexing']
+      constraint = options[:disable_indexing] || options["disable_indexing"]
       case constraint
       when nil
         return false
@@ -968,13 +972,12 @@ module AlgoliaSearch
 
     def automatic_changed_method_deprecated?
       (defined?(::ActiveRecord) && ActiveRecord::VERSION::MAJOR >= 5 && ActiveRecord::VERSION::MINOR >= 1) ||
-          (defined?(::ActiveRecord) && ActiveRecord::VERSION::MAJOR > 5)
+        (defined?(::ActiveRecord) && ActiveRecord::VERSION::MAJOR > 5)
     end
   end
 
   # these are the instance methods included
   module InstanceMethods
-
     def self.included(base)
       base.instance_eval do
         alias_method :index!, :algolia_index! unless method_defined? :index!
@@ -1023,12 +1026,11 @@ module AlgoliaSearch
     def algolia_mark_must_reindex
       # algolia_must_reindex flag is reset after every commit as part. If we must reindex at any point in
       # a stransaction, keep flag set until it is explicitly unset
-      @algolia_must_reindex ||=
-       if defined?(::Sequel) && is_a?(Sequel::Model)
-         new? || self.class.algolia_must_reindex?(self)
-       else
-         new_record? || self.class.algolia_must_reindex?(self)
-       end
+      @algolia_must_reindex ||= if defined?(::Sequel) && is_a?(Sequel::Model)
+          new? || self.class.algolia_must_reindex?(self)
+        else
+          new_record? || self.class.algolia_must_reindex?(self)
+        end
       true
     end
 

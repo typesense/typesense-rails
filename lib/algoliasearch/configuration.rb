@@ -1,3 +1,5 @@
+require "typesense"
+
 module Typesense
   module Configuration
     def initiliaze
@@ -9,9 +11,7 @@ module Typesense
     end
 
     def configuration=(configuration)
-      @@configuration = configuration.merge(
-        :user_agent => "Algolia for Rails (#{AlgoliaSearch::VERSION}); Rails (#{Rails::VERSION::STRING})"
-      )
+      @@configuration = configuration
     end
 
     def client
@@ -24,7 +24,7 @@ module Typesense
 
     def setup_client
       #@client = Algolia::Search::Client.create_with_config(Algolia::Search::Config.new(@@configuration))
-      @client=Typesense::Client.new(@@configuration)
+      @client = Typesense::Client.new(@@configuration)
     end
   end
 end
