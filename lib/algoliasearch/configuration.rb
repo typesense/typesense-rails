@@ -1,6 +1,6 @@
 require "typesense"
 
-module Typesense
+module AlgoliaSearch
   module Configuration
     def initiliaze
       @client = nil

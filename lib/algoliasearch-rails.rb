@@ -291,7 +291,7 @@ module AlgoliaSearch
   class SafeIndex
     def initialize(name, raise_on_failure)
       #@index = AlgoliaSearch.client.init_index(name)
-      @index = Typesense.client.collections.create(
+      @index = AlgoliaSearch.client.collections.create(
         { "name" => name,
           "fields" => [{ "name" => ".*", "type" => "auto" }] }
       )
