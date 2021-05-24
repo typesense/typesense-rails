@@ -730,11 +730,12 @@ module AlgoliaSearch
     alias :algolia_search_facet :algolia_search_for_facet_values
 
     def algolia_index(name = nil)
+      puts "index"
       if name
         algolia_configurations.each do |o, s|
           return algolia_ensure_init(o, s) if o[:index_name].to_s == name.to_s
         end
-        raise ArgumentError.new("Invalid index/replica name: #{name}")
+        #raise ArgumentError.new("Invalid index/replica name: #{name}")
       end
       algolia_ensure_init
     end
