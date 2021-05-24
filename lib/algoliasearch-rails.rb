@@ -295,6 +295,7 @@ module AlgoliaSearch
         { "name" => name,
           "fields" => [{ "name" => ".*", "type" => "auto" }] }
       )
+      @alias_index = AlgoliaSearch.client.aliases.upsert("#{name}_alias",{'collection_name' => name})
       @raise_on_failure = raise_on_failure.nil? || raise_on_failure
     end
 
@@ -730,12 +731,12 @@ module AlgoliaSearch
     alias :algolia_search_facet :algolia_search_for_facet_values
 
     def algolia_index(name = nil)
-      puts "index"
+      puts "typesense_index: creates collection and its alias"
       if name
         algolia_configurations.each do |o, s|
           return algolia_ensure_init(o, s) if o[:index_name].to_s == name.to_s
         end
-        #raise ArgumentError.new("Invalid index/replica name: #{name}")
+        raise ArgumentError.new("Invalid index/replica name: #{name}")
       end
       algolia_ensure_init
     end
