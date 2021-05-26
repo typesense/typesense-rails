@@ -1,5 +1,5 @@
 require "algolia"
-#reuire typesense
+#require typesense
 require "typesense"
 require "algoliasearch/version"
 require "algoliasearch/utilities"
@@ -291,11 +291,20 @@ module AlgoliaSearch
   class SafeIndex
     def initialize(name, raise_on_failure)
       #@index = AlgoliaSearch.client.init_index(name)
+      begin
       @index = AlgoliaSearch.client.collections.create(
         { "name" => name,
           "fields" => [{ "name" => ".*", "type" => "auto" }] }
       )
+      rescue
+        @index=AlgoliaSearch.client.collections[name].retrieve
+      end
+      #create alias
+      begin
       @alias_index = AlgoliaSearch.client.aliases.upsert("#{name}_alias",{'collection_name' => name})
+      rescue
+        @alias_index=AlgoliaSearch.client.aliases[name].retrieve
+      end
       @raise_on_failure = raise_on_failure.nil? || raise_on_failure
     end
 
@@ -382,101 +391,101 @@ module AlgoliaSearch
       self.algoliasearch_settings = IndexSettings.new(options, &block)
       self.algoliasearch_options = { :type => algolia_full_const_get(model_name.to_s), :per_page => algoliasearch_settings.get_setting(:hitsPerPage) || 10, :page => 1 }.merge(options)
 
-      attr_accessor :highlight_result, :snippet_result
+      # attr_accessor :highlight_result, :snippet_result
 
-      if options[:synchronous] == true
-        if defined?(::Sequel) && self < Sequel::Model
-          class_eval do
-            copy_after_validation = instance_method(:after_validation)
-            define_method(:after_validation) do |*args|
-              super(*args)
-              copy_after_validation.bind(self).call
-              algolia_mark_synchronous
-            end
-          end
-        else
-          after_validation :algolia_mark_synchronous if respond_to?(:after_validation)
-        end
-      end
-      if options[:enqueue]
-        raise ArgumentError.new("Cannot use a enqueue if the `synchronous` option if set") if options[:synchronous]
-        proc = if options[:enqueue] == true
-            Proc.new do |record, remove|
-              AlgoliaJob.perform_later(record, remove ? "algolia_remove_from_index!" : "algolia_index!")
-            end
-          elsif options[:enqueue].respond_to?(:call)
-            options[:enqueue]
-          elsif options[:enqueue].is_a?(Symbol)
-            Proc.new { |record, remove| self.send(options[:enqueue], record, remove) }
-          else
-            raise ArgumentError.new("Invalid `enqueue` option: #{options[:enqueue]}")
-          end
-        algoliasearch_options[:enqueue] = Proc.new do |record, remove|
-          proc.call(record, remove) unless algolia_without_auto_index_scope
-        end
-      end
-      unless options[:auto_index] == false
-        if defined?(::Sequel) && self < Sequel::Model
-          class_eval do
-            copy_after_validation = instance_method(:after_validation)
-            copy_before_save = instance_method(:before_save)
+      # if options[:synchronous] == true
+      #   if defined?(::Sequel) && self < Sequel::Model
+      #     class_eval do
+      #       copy_after_validation = instance_method(:after_validation)
+      #       define_method(:after_validation) do |*args|
+      #         super(*args)
+      #         copy_after_validation.bind(self).call
+      #         algolia_mark_synchronous
+      #       end
+      #     end
+      #   else
+      #     after_validation :algolia_mark_synchronous if respond_to?(:after_validation)
+      #   end
+      # end
+      # if options[:enqueue]
+      #   raise ArgumentError.new("Cannot use a enqueue if the `synchronous` option if set") if options[:synchronous]
+      #   proc = if options[:enqueue] == true
+      #       Proc.new do |record, remove|
+      #         AlgoliaJob.perform_later(record, remove ? "algolia_remove_from_index!" : "algolia_index!")
+      #       end
+      #     elsif options[:enqueue].respond_to?(:call)
+      #       options[:enqueue]
+      #     elsif options[:enqueue].is_a?(Symbol)
+      #       Proc.new { |record, remove| self.send(options[:enqueue], record, remove) }
+      #     else
+      #       raise ArgumentError.new("Invalid `enqueue` option: #{options[:enqueue]}")
+      #     end
+      #   algoliasearch_options[:enqueue] = Proc.new do |record, remove|
+      #     proc.call(record, remove) unless algolia_without_auto_index_scope
+      #   end
+      # end
+      # unless options[:auto_index] == false
+      #   if defined?(::Sequel) && self < Sequel::Model
+      #     class_eval do
+      #       copy_after_validation = instance_method(:after_validation)
+      #       copy_before_save = instance_method(:before_save)
 
-            define_method(:after_validation) do |*args|
-              super(*args)
-              copy_after_validation.bind(self).call
-              algolia_mark_must_reindex
-            end
+      #       define_method(:after_validation) do |*args|
+      #         super(*args)
+      #         copy_after_validation.bind(self).call
+      #         algolia_mark_must_reindex
+      #       end
 
-            define_method(:before_save) do |*args|
-              copy_before_save.bind(self).call
-              algolia_mark_for_auto_indexing
-              super(*args)
-            end
+      #       define_method(:before_save) do |*args|
+      #         copy_before_save.bind(self).call
+      #         algolia_mark_for_auto_indexing
+      #         super(*args)
+      #       end
 
-            sequel_version = Gem::Version.new(Sequel.version)
-            if sequel_version >= Gem::Version.new("4.0.0") && sequel_version < Gem::Version.new("5.0.0")
-              copy_after_commit = instance_method(:after_commit)
-              define_method(:after_commit) do |*args|
-                super(*args)
-                copy_after_commit.bind(self).call
-                algolia_perform_index_tasks
-              end
-            else
-              copy_after_save = instance_method(:after_save)
-              define_method(:after_save) do |*args|
-                super(*args)
-                copy_after_save.bind(self).call
-                self.db.after_commit do
-                  algolia_perform_index_tasks
-                end
-              end
-            end
-          end
-        else
-          after_validation :algolia_mark_must_reindex if respond_to?(:after_validation)
-          before_save :algolia_mark_for_auto_indexing if respond_to?(:before_save)
-          if respond_to?(:after_commit)
-            after_commit :algolia_perform_index_tasks
-          elsif respond_to?(:after_save)
-            after_save :algolia_perform_index_tasks
-          end
-        end
-      end
-      unless options[:auto_remove] == false
-        if defined?(::Sequel) && self < Sequel::Model
-          class_eval do
-            copy_after_destroy = instance_method(:after_destroy)
+      #       sequel_version = Gem::Version.new(Sequel.version)
+      #       if sequel_version >= Gem::Version.new("4.0.0") && sequel_version < Gem::Version.new("5.0.0")
+      #         copy_after_commit = instance_method(:after_commit)
+      #         define_method(:after_commit) do |*args|
+      #           super(*args)
+      #           copy_after_commit.bind(self).call
+      #           algolia_perform_index_tasks
+      #         end
+      #       else
+      #         copy_after_save = instance_method(:after_save)
+      #         define_method(:after_save) do |*args|
+      #           super(*args)
+      #           copy_after_save.bind(self).call
+      #           self.db.after_commit do
+      #             algolia_perform_index_tasks
+      #           end
+      #         end
+      #       end
+      #     end
+      #   else
+      #     after_validation :algolia_mark_must_reindex if respond_to?(:after_validation)
+      #     before_save :algolia_mark_for_auto_indexing if respond_to?(:before_save)
+      #     if respond_to?(:after_commit)
+      #       after_commit :algolia_perform_index_tasks
+      #     elsif respond_to?(:after_save)
+      #       after_save :algolia_perform_index_tasks
+      #     end
+      #   end
+      # end
+      # unless options[:auto_remove] == false
+      #   if defined?(::Sequel) && self < Sequel::Model
+      #     class_eval do
+      #       copy_after_destroy = instance_method(:after_destroy)
 
-            define_method(:after_destroy) do |*args|
-              copy_after_destroy.bind(self).call
-              algolia_enqueue_remove_from_index!(algolia_synchronous?)
-              super(*args)
-            end
-          end
-        else
-          after_destroy { |searchable| searchable.algolia_enqueue_remove_from_index!(algolia_synchronous?) } if respond_to?(:after_destroy)
-        end
-      end
+      #       define_method(:after_destroy) do |*args|
+      #         copy_after_destroy.bind(self).call
+      #         algolia_enqueue_remove_from_index!(algolia_synchronous?)
+      #         super(*args)
+      #       end
+      #     end
+      #   else
+      #     after_destroy { |searchable| searchable.algolia_enqueue_remove_from_index!(algolia_synchronous?) } if respond_to?(:after_destroy)
+      #   end
+      # end
     end
 
     def algolia_without_auto_index(&block)
@@ -599,27 +608,33 @@ module AlgoliaSearch
     end
 
     def algolia_index!(object, synchronous = false)
-      return if algolia_without_auto_index_scope
+      #return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options)
+        #next if algolia_indexing_disabled?(options)
         object_id = algolia_object_id_of(object, options)
-        index = algolia_ensure_init(options, settings)
-        next if options[:replica]
-        if algolia_indexable?(object, options)
+        #index = algolia_ensure_init(options, settings)
+        collection_name=algolia_index_name
+        typesense_client=AlgoliaSearch.client
+        #next if options[:replica]
+        #if algolia_indexable?(object, options)
           raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
-          if synchronous || options[:synchronous]
-            index.save_object!(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
-          else
-            index.save_object(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
-          end
-        elsif algolia_conditional_index?(options) && !object_id.blank?
-          # remove non-indexable objects
-          if synchronous || options[:synchronous]
-            index.delete_object!(object_id)
-          else
-            index.delete_object(object_id)
-          end
-        end
+          # if synchronous || options[:synchronous]
+          #   index.save_object!(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
+          # else
+            #index.save_object(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
+          # end
+          puts "typesense_index!: creates a document for the object and retrieves it"
+          typesense_client.collections[collection_name].documents.upsert(settings.get_attributes(object).merge "id" => object_id)
+          created_document=typesense_client.collections[collection_name].documents[object_id].retrieve
+          puts created_document
+        # elsif algolia_conditional_index?(options) && !object_id.blank?
+        #   remove non-indexable objects
+        #   if synchronous || options[:synchronous]
+        #     index.delete_object!(object_id)
+        #   else
+        #     index.delete_object(object_id)
+        #   end
+        # end
       end
       nil
     end
@@ -898,21 +913,21 @@ module AlgoliaSearch
       end
     end
 
-    def algolia_indexing_disabled?(options = nil)
-      options ||= algoliasearch_options
-      constraint = options[:disable_indexing] || options["disable_indexing"]
-      case constraint
-      when nil
-        return false
-      when true, false
-        return constraint
-      when String, Symbol
-        return send(constraint)
-      else
-        return constraint.call if constraint.respond_to?(:call) # Proc
-      end
-      raise ArgumentError, "Unknown constraint type: #{constraint} (#{constraint.class})"
-    end
+    # def algolia_indexing_disabled?(options = nil)
+    #   options ||= algoliasearch_options
+    #   constraint = options[:disable_indexing] || options["disable_indexing"]
+    #   case constraint
+    #   when nil
+    #     return false
+    #   when true, false
+    #     return constraint
+    #   when String, Symbol
+    #     return send(constraint)
+    #   else
+    #     return constraint.call if constraint.respond_to?(:call) # Proc
+    #   end
+    #   raise ArgumentError, "Unknown constraint type: #{constraint} (#{constraint.class})"
+    # end
 
     def algolia_find_in_batches(batch_size, &block)
       if (defined?(::ActiveRecord) && ancestors.include?(::ActiveRecord::Base)) || respond_to?(:find_in_batches)
