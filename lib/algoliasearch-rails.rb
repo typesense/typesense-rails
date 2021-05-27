@@ -289,23 +289,27 @@ module AlgoliaSearch
   #this class wraps an Algolia::Index object ensuring all raised exceptions
   #are correctly logged or thrown depending on the `raise_on_failure` option
   class SafeIndex
-    def initialize(name, raise_on_failure)
+
+    attr_accessor :typesense_client, :collection_name,:collection,:alias_collection
+    def initialize(name )#, raise_on_failure)
+      @typesense_client=AlgoliaSearch.client
+      @collection_name=name
       #@index = AlgoliaSearch.client.init_index(name)
       begin
-      @index = AlgoliaSearch.client.collections.create(
-        { "name" => name,
+      @collection = @typesense_client.collections.create(
+        { "name" => @collection_name,
           "fields" => [{ "name" => ".*", "type" => "auto" }] }
       )
       rescue
-        @index=AlgoliaSearch.client.collections[name].retrieve
+        @collection=@typesense_client.collections[@collection_name].retrieve
       end
       #create alias
       begin
-      @alias_index = AlgoliaSearch.client.aliases.upsert("#{name}_alias",{'collection_name' => name})
+      @alias_collection = @typesense_client.aliases.upsert("#{@collection_name}_alias",{'collection_name' => @collection_name})
       rescue
-        @alias_index=AlgoliaSearch.client.aliases[name].retrieve
+        @alias_collection=typesense_client.aliases[@collection_name].retrieve
       end
-      @raise_on_failure = raise_on_failure.nil? || raise_on_failure
+      #@raise_on_failure = raise_on_failure.nil? || raise_on_failure
     end
 
     # ::Algolia::Search::Index.instance_methods(false).each do |m|
@@ -560,7 +564,7 @@ module AlgoliaSearch
 
         if options[:check_settings] == false
           @client.copy_index!(src_index_name, tmp_index_name, %w(settings synonyms rules))
-          tmp_index = SafeIndex.new(tmp_index_name, !!options[:raise_on_failure])
+          tmp_index = SafeIndex.new(tmp_index_name)#, !!options[:raise_on_failure])
         else
           tmp_index = algolia_ensure_init(tmp_options, tmp_settings, master_settings)
         end
@@ -591,7 +595,7 @@ module AlgoliaSearch
           final_settings = settings.to_settings
         end
 
-        index = SafeIndex.new(algolia_index_name(options), true)
+        index = SafeIndex.new(algolia_index_name(options))#, true)
         task = index.set_settings(final_settings)
         index.wait_task(task.raw_response["taskID"]) if synchronous
       end
@@ -804,7 +808,7 @@ module AlgoliaSearch
 
       return @algolia_indexes[settings] if @algolia_indexes[settings]
 
-      @algolia_indexes[settings] = SafeIndex.new(algolia_index_name(options), algoliasearch_options[:raise_on_failure])
+      @algolia_indexes[settings] = SafeIndex.new(algolia_index_name(options))#, algoliasearch_options[:raise_on_failure])
 
       # current_settings = @algolia_indexes[settings].get_settings(:getVersion => 1) rescue nil # if the index doesn't exist
 
