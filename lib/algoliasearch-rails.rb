@@ -301,15 +301,11 @@ module AlgoliaSearch
         { "name" => @collection_name,
           "fields" => [{ "name" => ".*", "type" => "auto" }] }
       )
-      rescue
-        @typesense_client.collections[@collection_name].retrieve
+      rescue Typesense::Error::ObjectAlreadyExists => e
+        puts "\n\nObject already exists! Use Model.index.collection to retrieve it."
       end
       #create alias
-      begin
         @typesense_client.aliases.upsert("#{@collection_name}_alias",{'collection_name' => @collection_name})
-      rescue
-        @typesense_client.aliases[@collection_name].retrieve
-      end
       #@raise_on_failure = raise_on_failure.nil? || raise_on_failure
     end
 
@@ -556,10 +552,11 @@ module AlgoliaSearch
 
     # reindex whole database using a extra temporary index + move operation
     def algolia_reindex(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)#, synchronous = false)
-      return if algolia_without_auto_index_scope
+      puts "typesense_reindex: Reindexes whole database using alias."
+      # return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options)
-        next if options[:replica]
+        # next if algolia_indexing_disabled?(options)
+        # next if options[:replica]
 
         # fetch the master settings
         master_index = algolia_ensure_init(options, settings)
@@ -567,8 +564,8 @@ module AlgoliaSearch
         master_settings.merge!(JSON.parse(settings.to_settings.to_json)) # convert symbols to strings
 
         # remove the replicas of the temporary index
-        master_settings.delete :replicas
-        master_settings.delete "replicas"
+        # master_settings.delete :replicas
+        # master_settings.delete "replicas"
 
         # init temporary index
         src_index_name = algolia_index_name(options)
