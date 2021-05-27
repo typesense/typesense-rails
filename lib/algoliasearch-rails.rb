@@ -290,26 +290,35 @@ module AlgoliaSearch
   #are correctly logged or thrown depending on the `raise_on_failure` option
   class SafeIndex
 
-    attr_accessor :typesense_client, :collection_name,:collection,:alias_collection
+    attr_accessor :typesense_client,:collection_name
+
     def initialize(name )#, raise_on_failure)
       @typesense_client=AlgoliaSearch.client
       @collection_name=name
       #@index = AlgoliaSearch.client.init_index(name)
       begin
-      @collection = @typesense_client.collections.create(
+      @typesense_client.collections.create(
         { "name" => @collection_name,
           "fields" => [{ "name" => ".*", "type" => "auto" }] }
       )
       rescue
-        @collection=@typesense_client.collections[@collection_name].retrieve
+        @typesense_client.collections[@collection_name].retrieve
       end
       #create alias
       begin
-      @alias_collection = @typesense_client.aliases.upsert("#{@collection_name}_alias",{'collection_name' => @collection_name})
+        @typesense_client.aliases.upsert("#{@collection_name}_alias",{'collection_name' => @collection_name})
       rescue
-        @alias_collection=typesense_client.aliases[@collection_name].retrieve
+        @typesense_client.aliases[@collection_name].retrieve
       end
       #@raise_on_failure = raise_on_failure.nil? || raise_on_failure
+    end
+
+    def collection
+      @typesense_client.collections[@collection_name].retrieve
+    end
+
+    def alias_collection
+       @typesense_client.aliases[@collection_name].retrieve
     end
 
     # ::Algolia::Search::Index.instance_methods(false).each do |m|
@@ -509,38 +518,44 @@ module AlgoliaSearch
       Thread.current["algolia_without_auto_index_scope_for_#{self.model_name}"]
     end
 
-    def algolia_reindex!(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE, synchronous = false)
-      return if algolia_without_auto_index_scope
+    def algolia_reindex!(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)#, synchronous = false)
+      puts "typesense_reindex!: Reindexes all objects in database."
+      #return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options)
-        index = algolia_ensure_init(options, settings)
-        next if options[:replica]
-        last_task = nil
+        #next if algolia_indexing_disabled?(options)
+        indexObj = algolia_ensure_init(options, settings)
+        #next if options[:replica]
+        # last_task = nil
 
         algolia_find_in_batches(batch_size) do |group|
-          if algolia_conditional_index?(options)
-            # delete non-indexable objects
-            ids = group.select { |o| !algolia_indexable?(o, options) }.map { |o| algolia_object_id_of(o, options) }
-            index.delete_objects(ids.select { |id| !id.blank? })
-            # select only indexable objects
-            group = group.select { |o| algolia_indexable?(o, options) }
-          end
-          objects = group.map do |o|
+          # if algolia_conditional_index?(options)
+          #   # delete non-indexable objects
+          #   ids = group.select { |o| !algolia_indexable?(o, options) }.map { |o| algolia_object_id_of(o, options) }
+          #   index.delete_objects(ids.select { |id| !id.blank? })
+          #   # select only indexable objects
+          #   group = group.select { |o| algolia_indexable?(o, options) }
+          # end
+          documents = group.map do |o|
             attributes = settings.get_attributes(o)
             unless attributes.class == Hash
-              attributes = attributes.to_hash
+             attributes = attributes.to_hash
             end
-            attributes.merge "objectID" => algolia_object_id_of(o, options)
+            #convert to JSON object
+            attributes.merge("id" => algolia_object_id_of(o, options)).to_json
           end
-          last_task = index.save_objects(objects)
+          #last_task = index.save_objects(objects)
+          #converting to JSONL
+          documents=documents.join("\n")
+          created_documents=indexObj.typesense_client.collections[indexObj.collection_name].documents.import(documents, action: 'upsert' )
+          puts "\n\nDatabase reindexed! #{indexObj.collection["num_documents"]} documents upserted."
         end
-        index.wait_task(last_task.raw_response["taskID"]) if last_task and (synchronous || options[:synchronous])
+        # index.wait_task(last_task.raw_response["taskID"]) if last_task and (synchronous || options[:synchronous])
       end
       nil
     end
 
     # reindex whole database using a extra temporary index + move operation
-    def algolia_reindex(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE, synchronous = false)
+    def algolia_reindex(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)#, synchronous = false)
       return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
@@ -579,46 +594,45 @@ module AlgoliaSearch
         end
 
         move_task = SafeIndex.move_index(tmp_index.name, src_index_name)
-        master_index.wait_task(move_task.raw_response["taskID"]) if synchronous || options[:synchronous]
+        #master_index.wait_task(move_task.raw_response["taskID"]) if synchronous || options[:synchronous]
       end
       nil
     end
 
-    def algolia_set_settings(synchronous = false)
-      algolia_configurations.each do |options, settings|
-        if options[:primary_settings] && options[:inherit]
-          primary = options[:primary_settings].to_settings
-          primary.delete :replicas
-          primary.delete "replicas"
-          final_settings = primary.merge(settings.to_settings)
-        else
-          final_settings = settings.to_settings
-        end
+    # def algolia_set_settings(synchronous = false)
+    #   algolia_configurations.each do |options, settings|
+    #     if options[:primary_settings] && options[:inherit]
+    #       primary = options[:primary_settings].to_settings
+    #       primary.delete :replicas
+    #       primary.delete "replicas"
+    #       final_settings = primary.merge(settings.to_settings)
+    #     else
+    #       final_settings = settings.to_settings
+    #     end
 
-        index = SafeIndex.new(algolia_index_name(options))#, true)
-        task = index.set_settings(final_settings)
-        index.wait_task(task.raw_response["taskID"]) if synchronous
-      end
-    end
+    #     index = SafeIndex.new(algolia_index_name(options))#, true)
+    #     task = index.set_settings(final_settings)
+    #     index.wait_task(task.raw_response["taskID"]) if synchronous
+    #   end
+    # end
 
-    def algolia_index_objects(objects, synchronous = false)
+    def algolia_index_objects(objects)#, synchronous = false)
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
         index = algolia_ensure_init(options, settings)
         next if options[:replica]
         task = index.save_objects(objects.map { |o| settings.get_attributes(o).merge "objectID" => algolia_object_id_of(o, options) })
-        index.wait_task(task.raw_response["taskID"]) if synchronous || options[:synchronous]
+        #index.wait_task(task.raw_response["taskID"]) if synchronous || options[:synchronous]
       end
     end
 
-    def algolia_index!(object, synchronous = false)
+    def algolia_index!(object)#, synchronous = false)
+       puts "typesense_index!: Creates a document for the object and retrieves it."
       #return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
         #next if algolia_indexing_disabled?(options)
         object_id = algolia_object_id_of(object, options)
-        #index = algolia_ensure_init(options, settings)
-        collection_name=algolia_index_name
-        typesense_client=AlgoliaSearch.client
+        indexObj = algolia_ensure_init(options, settings)
         #next if options[:replica]
         #if algolia_indexable?(object, options)
           raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
@@ -627,11 +641,9 @@ module AlgoliaSearch
           # else
             #index.save_object(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
           # end
-          puts "typesense_index!: creates a document for the object and retrieves it"
-          typesense_client.collections[collection_name].documents.upsert(settings.get_attributes(object).merge "id" => object_id)
-          created_document=typesense_client.collections[collection_name].documents[object_id].retrieve
-          puts created_document
-        # elsif algolia_conditional_index?(options) && !object_id.blank?
+          indexObj.typesense_client.collections[indexObj.collection_name].documents.upsert(settings.get_attributes(object).merge "id" => object_id)
+          created_document=indexObj.typesense_client.collections[indexObj.collection_name].documents[object_id].retrieve
+          puts "\n\nDocument upserted into #{indexObj.collection_name} :\n\t#{created_document}"        # elsif algolia_conditional_index?(options) && !object_id.blank?
         #   remove non-indexable objects
         #   if synchronous || options[:synchronous]
         #     index.delete_object!(object_id)
@@ -643,7 +655,7 @@ module AlgoliaSearch
       nil
     end
 
-    def algolia_remove_from_index!(object, synchronous = false)
+    def algolia_remove_from_index!(object)#, synchronous = false)
       return if algolia_without_auto_index_scope
       object_id = algolia_object_id_of(object)
       raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
@@ -651,21 +663,21 @@ module AlgoliaSearch
         next if algolia_indexing_disabled?(options)
         index = algolia_ensure_init(options, settings)
         next if options[:replica]
-        if synchronous || options[:synchronous]
-          index.delete_object!(object_id)
-        else
+        # if synchronous || options[:synchronous]
+        #   index.delete_object!(object_id)
+        # else
           index.delete_object(object_id)
-        end
+        # end
       end
       nil
     end
 
-    def algolia_clear_index!(synchronous = false)
+    def algolia_clear_index!()#synchronous = false)
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
         index = algolia_ensure_init(options, settings)
         next if options[:replica]
-        synchronous || options[:synchronous] ? index.clear_objects! : index.clear_objects
+        #synchronous || options[:synchronous] ? index.clear_objects! : index.clear_objects
         @algolia_indexes[settings] = nil
       end
       nil
@@ -750,7 +762,7 @@ module AlgoliaSearch
     alias :algolia_search_facet :algolia_search_for_facet_values
 
     def algolia_index(name = nil)
-      puts "typesense_index: creates collection and its alias"
+      puts "typesense_index: Creates collection and its alias."
       if name
         algolia_configurations.each do |o, s|
           return algolia_ensure_init(o, s) if o[:index_name].to_s == name.to_s
@@ -759,6 +771,7 @@ module AlgoliaSearch
       end
       algolia_ensure_init
     end
+
 
     def algolia_index_name(options = nil)
       options ||= algoliasearch_options
@@ -1006,8 +1019,8 @@ module AlgoliaSearch
       end
     end
 
-    def algolia_index!(synchronous = false)
-      self.class.algolia_index!(self, synchronous || algolia_synchronous?)
+    def algolia_index!()#synchronous = false)
+      self.class.algolia_index!(self)#, synchronous || algolia_synchronous?)
     end
 
     def algolia_remove_from_index!(synchronous = false)
