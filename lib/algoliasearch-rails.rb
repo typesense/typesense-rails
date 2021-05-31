@@ -291,29 +291,48 @@ module AlgoliaSearch
 
     attr_accessor :typesense_client,:collection_name
 
-    def initialize(name )#, raise_on_failure)
+    def initialize(name)#, raise_on_failure)
       @typesense_client=AlgoliaSearch.client
       @collection_name=name
       #@index = AlgoliaSearch.client.init_index(name)
-      begin
+      #@raise_on_failure = raise_on_failure.nil? || raise_on_failure
+    end
+
+    def create_collection
+         begin
       @typesense_client.collections.create(
         { "name" => @collection_name,
           "fields" => [{ "name" => ".*", "type" => "auto" }] }
       )
+      puts "\n\nCollection '#{@collection_name}' created!\n\n"
       rescue Typesense::Error::ObjectAlreadyExists => e
-        puts "\n\nObject already exists! Use Model.index.collection to retrieve it."
+        puts "\n\nCollection already exists!\n\n"
+        self.get_collection
       end
-      #create alias
-        @typesense_client.aliases.upsert("#{@collection_name}_alias",{'collection_name' => @collection_name})
-      #@raise_on_failure = raise_on_failure.nil? || raise_on_failure
     end
 
-    def collection
+    def create_alias
+      @typesense_client.aliases.upsert("#{@collection_name}_alias",{'collection_name' => @collection_name})
+    end
+
+    def get_collection
       @typesense_client.collections[@collection_name].retrieve
     end
 
-    def alias_collection
-       @typesense_client.aliases[@collection_name].retrieve
+    def get_alias
+       @typesense_client.aliases["#{@collection_name}_alias"].retrieve
+    end
+
+    def upsert_document(object)
+      @typesense_client.collections[@collection_name].documents.upsert(object)
+    end
+
+    def import_documents(jsonl_object,action)
+      @typesense_client.collections[@collection_name].documents.import(jsonl_object, action: action)
+    end
+
+    def retrieve_document(object_id)
+      @typesense_client.collections[@collection_name].documents[object_id].retrieve
     end
 
     # ::Algolia::Search::Index.instance_methods(false).each do |m|
@@ -514,7 +533,7 @@ module AlgoliaSearch
     end
 
     def algolia_reindex!(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)#, synchronous = false)
-      puts "typesense_reindex!: Reindexes all objects in database."
+      puts "\n\ntypesense_reindex!: Reindexes all objects in database.\n\n"
       #return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
         #next if algolia_indexing_disabled?(options)
@@ -540,9 +559,9 @@ module AlgoliaSearch
           end
           #last_task = index.save_objects(objects)
           #converting to JSONL
-          documents=documents.join("\n")
-          created_documents=indexObj.typesense_client.collections[indexObj.collection_name].documents.import(documents, action: 'upsert' )
-          puts "\n\nDatabase reindexed! #{indexObj.collection["num_documents"]} documents upserted."
+          jsonl_object=documents.join("\n")
+          created_documents=indexObj.import_documents(jsonl_object,'upsert')
+          puts "\n\nDatabase reindexed! #{indexObj.get_collection["num_documents"]} documents upserted.\n\n"
         end
         # index.wait_task(last_task.raw_response["taskID"]) if last_task and (synchronous || options[:synchronous])
       end
@@ -623,7 +642,7 @@ module AlgoliaSearch
     end
 
     def algolia_index!(object)#, synchronous = false)
-       puts "typesense_index!: Creates a document for the object and retrieves it."
+       puts "\n\ntypesense_index!: Creates a document for the object and retrieves it.\n\n"
       #return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
         #next if algolia_indexing_disabled?(options)
@@ -637,9 +656,9 @@ module AlgoliaSearch
           # else
             #index.save_object(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
           # end
-          indexObj.typesense_client.collections[indexObj.collection_name].documents.upsert(settings.get_attributes(object).merge "id" => object_id)
-          created_document=indexObj.typesense_client.collections[indexObj.collection_name].documents[object_id].retrieve
-          puts "\n\nDocument upserted into #{indexObj.collection_name} :\n\t#{created_document}"        # elsif algolia_conditional_index?(options) && !object_id.blank?
+          indexObj.upsert_document(settings.get_attributes(object).merge "id" => object_id)
+          puts "\n\nDocument upserted into #{indexObj.collection_name} :\n\t#{indexObj.retrieve_document(object_id)}\n\n"
+        # elsif algolia_conditional_index?(options) && !object_id.blank?
         #   remove non-indexable objects
         #   if synchronous || options[:synchronous]
         #     index.delete_object!(object_id)
@@ -758,7 +777,7 @@ module AlgoliaSearch
     alias :algolia_search_facet :algolia_search_for_facet_values
 
     def algolia_index(name = nil)
-      puts "typesense_index: Creates collection and its alias."
+      puts "\n\ntypesense_index: Creates collection and its alias.\n\n"
       if name
         algolia_configurations.each do |o, s|
           return algolia_ensure_init(o, s) if o[:index_name].to_s == name.to_s
@@ -818,7 +837,8 @@ module AlgoliaSearch
       return @algolia_indexes[settings] if @algolia_indexes[settings]
 
       @algolia_indexes[settings] = SafeIndex.new(algolia_index_name(options))#, algoliasearch_options[:raise_on_failure])
-
+      @algolia_indexes[settings].create_collection
+      @algolia_indexes[settings].create_alias
       # current_settings = @algolia_indexes[settings].get_settings(:getVersion => 1) rescue nil # if the index doesn't exist
 
       # index_settings ||= settings.to_settings
