@@ -94,5 +94,5 @@ Gem::Specification.new do |s|
     s.add_dependency(%q<algolia>, ["< 3.0.0"])
   end
   #added typesense dependency
-  s.add_dependency "typesense"
+  s.add_dependency "typesense", ">=0.5.5"
 end

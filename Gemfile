@@ -37,7 +37,4 @@ group :test, :development do
   gem 'kaminari', '< 1'
 end
 
-#added typesense gem
 gem "typesense", "~> 0.5.5"
-
-gem "solargraph", "~> 0.40.4"

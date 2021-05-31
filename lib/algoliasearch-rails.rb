@@ -1,5 +1,4 @@
 require "algolia"
-#require typesense
 require "typesense"
 require "algoliasearch/version"
 require "algoliasearch/utilities"
