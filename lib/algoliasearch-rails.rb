@@ -348,6 +348,9 @@ module AlgoliaSearch
       @typesense_client.collections[@collection_name].documents[object_id].retrieve
     end
 
+    def delete_document(object_id)
+      @typesense_client.collections[@collection_name].documents[object_id].delete
+    end
 
     # ::Algolia::Search::Index.instance_methods(false).each do |m|
     #   define_method(m) do |*args, &block|
@@ -659,6 +662,7 @@ module AlgoliaSearch
         #task = index.save_objects(objects.map { |o| settings.get_attributes(o).merge "objectID" => algolia_object_id_of(o, options) })
         #index.wait_task(task.raw_response["taskID"]) if synchronous || options[:synchronous]
       end
+      nil
     end
 
     def algolia_index!(object)#, synchronous = false)
@@ -691,18 +695,21 @@ module AlgoliaSearch
     end
 
     def algolia_remove_from_index!(object)#, synchronous = false)
-      return if algolia_without_auto_index_scope
+      puts "\n\ntypesense_remove_from_index: Removes specified object from the collection of given model.\n\n"
+      #return if algolia_without_auto_index_scope
       object_id = algolia_object_id_of(object)
       raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
       algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options)
-        index = algolia_ensure_init(options, settings)
-        next if options[:replica]
+        #next if algolia_indexing_disabled?(options)
+        indexObj = algolia_ensure_init(options, settings)
+        #next if options[:replica]
         # if synchronous || options[:synchronous]
         #   index.delete_object!(object_id)
         # else
-          index.delete_object(object_id)
+          #index.delete_object(object_id)
         # end
+        indexObj.delete_document(object_id)
+        puts "\n\nRemoved document with object id '#{object_id}' from #{indexObj.collection_name}\n\n"
       end
       nil
     end
