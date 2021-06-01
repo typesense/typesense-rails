@@ -316,7 +316,16 @@ module AlgoliaSearch
     end
 
     def get_collection
-      @typesense_client.collections[@collection_name].retrieve
+       @typesense_client.collections[@collection_name].retrieve
+    end
+
+    def collection_present?
+      begin
+        self.get_collection
+        return true
+      rescue Typesense::Error::ObjectNotFound => e
+        return false
+      end
     end
 
     def get_alias
@@ -324,7 +333,11 @@ module AlgoliaSearch
     end
 
     def upsert_document(object)
+      begin
       @typesense_client.collections[@collection_name].documents.upsert(object)
+      rescue =>e
+        puts e.message
+      end
     end
 
     def import_documents(jsonl_object,action)
@@ -334,6 +347,7 @@ module AlgoliaSearch
     def retrieve_document(object_id)
       @typesense_client.collections[@collection_name].documents[object_id].retrieve
     end
+
 
     # ::Algolia::Search::Index.instance_methods(false).each do |m|
     #   define_method(m) do |*args, &block|
@@ -561,7 +575,7 @@ module AlgoliaSearch
           #converting to JSONL
           jsonl_object=documents.join("\n")
           created_documents=indexObj.import_documents(jsonl_object,'upsert')
-          puts "\n\nDatabase reindexed! #{indexObj.get_collection["num_documents"]} documents upserted.\n\n"
+          puts "\n\nAll objects reindexed! #{indexObj.get_collection["num_documents"]} documents upserted.\n\n"
         end
         # index.wait_task(last_task.raw_response["taskID"]) if last_task and (synchronous || options[:synchronous])
       end
@@ -632,11 +646,17 @@ module AlgoliaSearch
     # end
 
     def algolia_index_objects(objects)#, synchronous = false)
+      puts "\n\ntypesense_index_objects: Upserts given object array into collection of given model.\n\n"
       algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options)
-        index = algolia_ensure_init(options, settings)
-        next if options[:replica]
-        task = index.save_objects(objects.map { |o| settings.get_attributes(o).merge "objectID" => algolia_object_id_of(o, options) })
+        #next if algolia_indexing_disabled?(options)
+        indexObj = algolia_ensure_init(options, settings)
+        #next if options[:replica]
+        documents=objects.map { |o| settings.get_attributes(o).merge("id" => algolia_object_id_of(o, options)).to_json }
+        jsonl_object=documents.join("\n")
+        created_documents=indexObj.import_documents(jsonl_object,'upsert')
+        puts "\n\n#{objects.length} objects upserted into #{indexObj.collection_name}!\n\n"
+        indexObj.get_collection
+        #task = index.save_objects(objects.map { |o| settings.get_attributes(o).merge "objectID" => algolia_object_id_of(o, options) })
         #index.wait_task(task.raw_response["taskID"]) if synchronous || options[:synchronous]
       end
     end
@@ -834,7 +854,7 @@ module AlgoliaSearch
       options ||= algoliasearch_options
       settings ||= algoliasearch_settings
 
-      return @algolia_indexes[settings] if @algolia_indexes[settings]
+      return @algolia_indexes[settings] if @algolia_indexes[settings] and  @algolia_indexes[settings].collection_present?
 
       @algolia_indexes[settings] = SafeIndex.new(algolia_index_name(options))#, algoliasearch_options[:raise_on_failure])
       @algolia_indexes[settings].create_collection
