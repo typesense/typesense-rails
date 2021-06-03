@@ -352,6 +352,10 @@ module AlgoliaSearch
       @typesense_client.collections[@collection_name].documents[object_id].delete
     end
 
+    def delete_collection()
+       @typesense_client.collections[@collection_name].delete
+    end
+
     # ::Algolia::Search::Index.instance_methods(false).each do |m|
     #   define_method(m) do |*args, &block|
     #     SafeIndex.log_or_throw(m, @raise_on_failure) do
@@ -554,7 +558,7 @@ module AlgoliaSearch
       #return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
         #next if algolia_indexing_disabled?(options)
-        indexObj = algolia_ensure_init(options, settings)
+        indexObj = algolia_ensure_init(options: options,settings: settings)
         #next if options[:replica]
         # last_task = nil
 
@@ -594,7 +598,7 @@ module AlgoliaSearch
         # next if options[:replica]
 
         # fetch the master settings
-        master_index = algolia_ensure_init(options, settings)
+        master_index = algolia_ensure_init(options: options,settings: settings)
         master_settings = master_index.get_settings rescue {} # if master doesn't exist yet
         master_settings.merge!(JSON.parse(settings.to_settings.to_json)) # convert symbols to strings
 
@@ -652,7 +656,7 @@ module AlgoliaSearch
       puts "\n\ntypesense_index_objects: Upserts given object array into collection of given model.\n\n"
       algolia_configurations.each do |options, settings|
         #next if algolia_indexing_disabled?(options)
-        indexObj = algolia_ensure_init(options, settings)
+        indexObj = algolia_ensure_init(options: options,settings: settings)
         #next if options[:replica]
         documents=objects.map { |o| settings.get_attributes(o).merge("id" => algolia_object_id_of(o, options)).to_json }
         jsonl_object=documents.join("\n")
@@ -671,7 +675,7 @@ module AlgoliaSearch
       algolia_configurations.each do |options, settings|
         #next if algolia_indexing_disabled?(options)
         object_id = algolia_object_id_of(object, options)
-        indexObj = algolia_ensure_init(options, settings)
+        indexObj = algolia_ensure_init(options: options,settings: settings)
         #next if options[:replica]
         #if algolia_indexable?(object, options)
           raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
@@ -701,7 +705,9 @@ module AlgoliaSearch
       raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
       algolia_configurations.each do |options, settings|
         #next if algolia_indexing_disabled?(options)
-        indexObj = algolia_ensure_init(options, settings)
+        indexObj = algolia_ensure_init(options: options, settings: settings,create: false)
+
+        raise ArgumentError.new("#{indexObj.collection_name} collection not found!") unless indexObj.collection_present?
         #next if options[:replica]
         # if synchronous || options[:synchronous]
         #   index.delete_object!(object_id)
@@ -715,12 +721,16 @@ module AlgoliaSearch
     end
 
     def algolia_clear_index!()#synchronous = false)
+      puts "\n\ntypesense_clear_index!: Delete collection of given model."
       algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options)
-        index = algolia_ensure_init(options, settings)
-        next if options[:replica]
+        #next if algolia_indexing_disabled?(options)
+        indexObj = algolia_ensure_init(options: options,settings: settings,create: false)
+        #next if options[:replica]
         #synchronous || options[:synchronous] ? index.clear_objects! : index.clear_objects
+        raise ArgumentError.new("#{indexObj.collection_name} collection not found!") unless indexObj.collection_present?
+        indexObj.delete_collection
         @algolia_indexes[settings] = nil
+        puts "\n\nDeleted #{indexObj.collection_name} collection!\n\n"
       end
       nil
     end
@@ -853,7 +863,8 @@ module AlgoliaSearch
 
     protected
 
-    def algolia_ensure_init(options = nil, settings = nil, index_settings = nil)
+    def algolia_ensure_init(options: nil, settings: nil, index_settings: nil,create: true)
+
       raise ArgumentError.new("No `algoliasearch` block found in your model.") if algoliasearch_settings.nil?
 
       @algolia_indexes ||= {}
@@ -861,11 +872,13 @@ module AlgoliaSearch
       options ||= algoliasearch_options
       settings ||= algoliasearch_settings
 
-      return @algolia_indexes[settings] if @algolia_indexes[settings] and  @algolia_indexes[settings].collection_present?
+      return @algolia_indexes[settings] if @algolia_indexes[settings] and  @algolia_indexes[settings].collection_present?\
 
       @algolia_indexes[settings] = SafeIndex.new(algolia_index_name(options))#, algoliasearch_options[:raise_on_failure])
+      if create
       @algolia_indexes[settings].create_collection
       @algolia_indexes[settings].create_alias
+      end
       # current_settings = @algolia_indexes[settings].get_settings(:getVersion => 1) rescue nil # if the index doesn't exist
 
       # index_settings ||= settings.to_settings
