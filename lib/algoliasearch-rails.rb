@@ -356,6 +356,10 @@ module AlgoliaSearch
        @typesense_client.collections[@collection_name].delete
     end
 
+    def search_collection(search_parameters)
+      @typesense_client.collections[@collection_name].documents.search(search_parameters)
+    end
+
     # ::Algolia::Search::Index.instance_methods(false).each do |m|
     #   define_method(m) do |*args, &block|
     #     SafeIndex.log_or_throw(m, @raise_on_failure) do
@@ -736,12 +740,14 @@ module AlgoliaSearch
     end
 
     def algolia_raw_search(q, params = {})
+      puts "\n\ntypesense_raw_search: JSON output of search.\n\n"
       index_name = params.delete(:index) ||
                    params.delete("index") ||
                    params.delete(:replica) ||
                    params.delete("replica")
-      index = algolia_index(index_name)
-      index.search(q, Hash[params.map { |k, v| [k.to_s, v.to_s] }])
+      indexObj = algolia_index(index_name)
+      indexObj.search_collection(params.merge({'q': q}))
+      # index.search(q, Hash[params.map { |k, v| [k.to_s, v.to_s] }])
     end
 
     module AdditionalMethods
@@ -768,11 +774,11 @@ module AlgoliaSearch
     end
 
     def algolia_search(q, params = {})
-      if AlgoliaSearch.configuration[:pagination_backend]
-        # kaminari and will_paginate start pagination at 1, Algolia starts at 0
-        params[:page] = (params.delete("page") || params.delete(:page)).to_i
-        params[:page] -= 1 if params[:page].to_i > 0
-      end
+      # if AlgoliaSearch.configuration[:pagination_backend]
+      #   # kaminari and will_paginate start pagination at 1, Algolia starts at 0
+      #   params[:page] = (params.delete("page") || params.delete(:page)).to_i
+      #   params[:page] -= 1 if params[:page].to_i > 0
+      # end
       json = algolia_raw_search(q, params)
       hit_ids = json["hits"].map { |hit| hit["objectID"] }
       if defined?(::Mongoid::Document) && self.include?(::Mongoid::Document)
@@ -872,7 +878,7 @@ module AlgoliaSearch
       options ||= algoliasearch_options
       settings ||= algoliasearch_settings
 
-      return @algolia_indexes[settings] if @algolia_indexes[settings] and  @algolia_indexes[settings].collection_present?\
+      return @algolia_indexes[settings] if @algolia_indexes[settings] and  @algolia_indexes[settings].collection_present?
 
       @algolia_indexes[settings] = SafeIndex.new(algolia_index_name(options))#, algoliasearch_options[:raise_on_failure])
       if create
