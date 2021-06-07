@@ -294,6 +294,7 @@ module AlgoliaSearch
     def initialize(name)#, raise_on_failure)
       @typesense_client=AlgoliaSearch.client
       @collection_name=name
+      @alias_collection_name=name+"alias"
       #@index = AlgoliaSearch.client.init_index(name)
       #@raise_on_failure = raise_on_failure.nil? || raise_on_failure
     end
@@ -312,7 +313,7 @@ module AlgoliaSearch
     end
 
     def create_alias
-      @typesense_client.aliases.upsert("#{@collection_name}_alias",{'collection_name' => @collection_name})
+      @typesense_client.aliases.upsert(@alias_collection_name,{'collection_name' => @collection_name})
     end
 
     def get_collection
@@ -321,7 +322,7 @@ module AlgoliaSearch
 
     def collection_present?
       begin
-        self.get_collection
+        self.get_alias
         return true
       rescue Typesense::Error::ObjectNotFound => e
         return false
@@ -329,35 +330,35 @@ module AlgoliaSearch
     end
 
     def get_alias
-       @typesense_client.aliases["#{@collection_name}_alias"].retrieve
+       @typesense_client.aliases[@alias_collection_name].retrieve
     end
 
     def upsert_document(object)
       begin
-      @typesense_client.collections[@collection_name].documents.upsert(object)
+      @typesense_client.collections[@alias_collection_name].documents.upsert(object)
       rescue =>e
         puts e.message
       end
     end
 
     def import_documents(jsonl_object,action)
-      @typesense_client.collections[@collection_name].documents.import(jsonl_object, action: action)
+      @typesense_client.collections[@alias_collection_name].documents.import(jsonl_object, action: action)
     end
 
     def retrieve_document(object_id)
-      @typesense_client.collections[@collection_name].documents[object_id].retrieve
+      @typesense_client.collections[@alias_collection_name].documents[object_id].retrieve
     end
 
     def delete_document(object_id)
-      @typesense_client.collections[@collection_name].documents[object_id].delete
+      @typesense_client.collections[@alias_collection_name].documents[object_id].delete
     end
 
     def delete_collection()
-       @typesense_client.collections[@collection_name].delete
+       @typesense_client.collections[@alias_collection_name].delete
     end
 
     def search_collection(search_parameters)
-      @typesense_client.collections[@collection_name].documents.search(search_parameters)
+      @typesense_client.collections[@alias_collection_name].documents.search(search_parameters)
     end
 
     # ::Algolia::Search::Index.instance_methods(false).each do |m|
@@ -558,7 +559,7 @@ module AlgoliaSearch
     end
 
     def algolia_reindex!(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)#, synchronous = false)
-      puts "\n\ntypesense_reindex!: Reindexes all objects in database.\n\n"
+      puts "\n\ntypesense_reindex!: Reindexes all objects in database(does not remove deleted objects from the collection).\n\n"
       #return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
         #next if algolia_indexing_disabled?(options)
@@ -603,8 +604,8 @@ module AlgoliaSearch
 
         # fetch the master settings
         master_index = algolia_ensure_init(options: options,settings: settings)
-        master_settings = master_index.get_settings rescue {} # if master doesn't exist yet
-        master_settings.merge!(JSON.parse(settings.to_settings.to_json)) # convert symbols to strings
+        #master_settings = master_index.get_settings rescue {} # if master doesn't exist yet
+        #master_settings.merge!(JSON.parse(settings.to_settings.to_json)) # convert symbols to strings
 
         # remove the replicas of the temporary index
         # master_settings.delete :replicas
@@ -617,12 +618,12 @@ module AlgoliaSearch
         tmp_options.delete(:per_environment) # already included in the temporary index_name
         tmp_settings = settings.dup
 
-        if options[:check_settings] == false
+        # if options[:check_settings] == false
           @client.copy_index!(src_index_name, tmp_index_name, %w(settings synonyms rules))
           tmp_index = SafeIndex.new(tmp_index_name)#, !!options[:raise_on_failure])
-        else
-          tmp_index = algolia_ensure_init(tmp_options, tmp_settings, master_settings)
-        end
+        # else
+        #   tmp_index = algolia_ensure_init(tmp_options, tmp_settings, master_settings)
+        # end
 
         algolia_find_in_batches(batch_size) do |group|
           if algolia_conditional_index?(options)
@@ -1085,8 +1086,8 @@ module AlgoliaSearch
       self.class.algolia_index!(self)#, synchronous || algolia_synchronous?)
     end
 
-    def algolia_remove_from_index!(synchronous = false)
-      self.class.algolia_remove_from_index!(self, synchronous || algolia_synchronous?)
+    def algolia_remove_from_index!()#synchronous = false)
+      self.class.algolia_remove_from_index!(self)#, synchronous || algolia_synchronous?)
     end
 
     def algolia_enqueue_remove_from_index!(synchronous)
