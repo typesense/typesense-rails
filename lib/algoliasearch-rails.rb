@@ -27,7 +27,7 @@ module AlgoliaSearch
   autoload :Configuration, "algoliasearch/configuration"
   extend Configuration
 
-  #autoload :Pagination, 'algoliasearch/pagination'
+  autoload :Pagination, 'algoliasearch/pagination'
 
   class << self
     attr_reader :included_in
@@ -779,13 +779,13 @@ module AlgoliaSearch
     end
 
     def algolia_search(q, params = {})
-      # if AlgoliaSearch.configuration[:pagination_backend]
-      #   # kaminari and will_paginate start pagination at 1, Algolia starts at 0
-      #   params[:page] = (params.delete("page") || params.delete(:page)).to_i
-      #   params[:page] -= 1 if params[:page].to_i > 0
-      # end
+      if AlgoliaSearch.configuration[:pagination_backend]
+        # kaminari and will_paginate start pagination at 1, Algolia starts at 0
+        params[:page] = (params.delete("page") || params.delete(:page)).to_i
+        params[:page] -= 1 if params[:page].to_i > 0
+      end
       json = algolia_raw_search(q, params)
-      hit_ids = json["hits"].map { |hit| hit["objectID"] }
+      hit_ids = json["hits"].map { |hit| hit["id"] }
       if defined?(::Mongoid::Document) && self.include?(::Mongoid::Document)
         condition_key = algolia_object_id_method.in
       else
@@ -795,17 +795,18 @@ module AlgoliaSearch
         algolia_object_id_of(hit)
       end
       results = json["hits"].map do |hit|
-        o = results_by_id[hit["objectID"].to_s]
+        o = results_by_id[hit["id"].to_s]
         if o
-          o.highlight_result = hit["_highlightResult"]
-          o.snippet_result = hit["_snippetResult"]
+          o.highlight_result = hit["highlights"]
+          o.snippet_result = hit["highlights"]["snippet"]
           o
         end
       end.compact
       # Algolia has a default limit of 1000 retrievable hits
-      total_hits = json["nbHits"].to_i < json["nbPages"].to_i * json["hitsPerPage"].to_i ?
-        json["nbHits"].to_i : json["nbPages"].to_i * json["hitsPerPage"].to_i
-      res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json["page"].to_i + 1, :per_page => json["hitsPerPage"] }))
+      # total_hits = json["nbHits"].to_i < json["nbPages"].to_i * json["hitsPerPage"].to_i ?
+      #   json["nbHits"].to_i : json["nbPages"].to_i * json["hitsPerPage"].to_i
+      total_hits=json["found"]
+      res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json["page"].to_i + 1, :per_page => json["per_page"] }))
       res.extend(AdditionalMethods)
       res.send(:algolia_init_raw_answer, json)
       res
