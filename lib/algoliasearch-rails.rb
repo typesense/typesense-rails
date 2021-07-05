@@ -364,18 +364,18 @@ module AlgoliaSearch
         alias_method :clear_index!, :algolia_clear_index! unless method_defined? :clear_index!
         alias_method :search, :algolia_search unless method_defined? :search
         alias_method :raw_search, :algolia_raw_search unless method_defined? :raw_search
-        alias_method :search_facet, :algolia_search_facet unless method_defined? :search_facet
-        alias_method :search_for_facet_values, :algolia_search_for_facet_values unless method_defined? :search_for_facet_values
+        # alias_method :search_facet, :algolia_search_facet unless method_defined? :search_facet
+        # alias_method :search_for_facet_values, :algolia_search_for_facet_values unless method_defined? :search_for_facet_values
         alias_method :index, :algolia_index unless method_defined? :index
         alias_method :index_name, :algolia_index_name unless method_defined? :index_name
         alias_method :must_reindex?, :algolia_must_reindex? unless method_defined? :must_reindex?
-        alias_method :collection_details, :typesense_collection_details unless method_defined? :collection_details
+        alias_method :typesense_collection_schema, :typesense_collection_schema unless method_defined? :collection_schema
       end
 
       base.cattr_accessor :algoliasearch_options, :algoliasearch_settings,:typesense_client
     end
 
-    def typesense_collection_details
+    def typesense_collection_schema
       collectionObj = algolia_ensure_init()
       self.get_collection(collectionObj[:alias_name])
     end
@@ -447,7 +447,7 @@ module AlgoliaSearch
       self.algoliasearch_settings = IndexSettings.new(options, &block)
       self.algoliasearch_options = { :type => algolia_full_const_get(model_name.to_s), :per_page => algoliasearch_settings.get_setting(:hitsPerPage) || 10, :page => 1 }.merge(options)
       self.typesense_client||=AlgoliaSearch.client
-      # attr_accessor :highlight_result, :snippet_result
+      attr_accessor :highlight_result, :snippet_result
 
       # if options[:synchronous] == true
       #   if defined?(::Sequel) && self < Sequel::Model
@@ -779,26 +779,33 @@ module AlgoliaSearch
     end
 
     def algolia_search(q, params = {})
-      if AlgoliaSearch.configuration[:pagination_backend]
-        # kaminari and will_paginate start pagination at 1, Algolia starts at 0
-        params[:page] = (params.delete("page") || params.delete(:page)).to_i
-        params[:page] -= 1 if params[:page].to_i > 0
-      end
+      puts "\n\ntypsense_search: Searches and returns matching objects from the database.\n\n"
+      # if AlgoliaSearch.configuration[:pagination_backend]
+      #   # kaminari and will_paginate start pagination at 1, Algolia starts at 0
+      #   params[:page] = (params.delete("page") || params.delete(:page)).to_i
+      #   params[:page] -= 1 if params[:page].to_i > 0
+      # end
       json = algolia_raw_search(q, params)
-      hit_ids = json["hits"].map { |hit| hit["id"] }
+      hit_ids = json["hits"].map { |hit| hit["document"]["id"] }
+
       if defined?(::Mongoid::Document) && self.include?(::Mongoid::Document)
         condition_key = algolia_object_id_method.in
       else
         condition_key = algolia_object_id_method
       end
+
+
       results_by_id = algoliasearch_options[:type].where(condition_key => hit_ids).index_by do |hit|
         algolia_object_id_of(hit)
       end
+
       results = json["hits"].map do |hit|
-        o = results_by_id[hit["id"].to_s]
+        o = results_by_id[hit["document"]["id"].to_s]
         if o
           o.highlight_result = hit["highlights"]
-          o.snippet_result = hit["highlights"]["snippet"]
+          o.snippet_result = hit["highlights"].map { |highlight|
+            highlight["snippet"]
+          }
           o
         end
       end.compact
@@ -806,24 +813,24 @@ module AlgoliaSearch
       # total_hits = json["nbHits"].to_i < json["nbPages"].to_i * json["hitsPerPage"].to_i ?
       #   json["nbHits"].to_i : json["nbPages"].to_i * json["hitsPerPage"].to_i
       total_hits=json["found"]
-      res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json["page"].to_i + 1, :per_page => json["per_page"] }))
+      res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json["page"].to_i + 1, :per_page => json["request_params"]["per_page"] }))
       res.extend(AdditionalMethods)
       res.send(:algolia_init_raw_answer, json)
       res
     end
 
-    def algolia_search_for_facet_values(facet, text, params = {})
-      index_name = params.delete(:index) ||
-                   params.delete("index") ||
-                   params.delete(:replica) ||
-                   params.delete("replicas")
-      index = algolia_index(index_name)
-      query = Hash[params.map { |k, v| [k.to_s, v.to_s] }]
-      index.search_for_facet_values(facet, text, query)["facetHits"]
-    end
+    # def algolia_search_for_facet_values(facet, text, params = {})
+    #   index_name = params.delete(:index) ||
+    #                params.delete("index") ||
+    #                params.delete(:replica) ||
+    #                params.delete("replicas")
+    #   index = algolia_index(index_name)
+    #   query = Hash[params.map { |k, v| [k.to_s, v.to_s] }]
+    #   index.search_for_facet_values(facet, text, query)["facetHits"]
+    # end
 
-    # deprecated (renaming)
-    alias :algolia_search_facet :algolia_search_for_facet_values
+    # # deprecated (renaming)
+    # alias :algolia_search_facet :algolia_search_for_facet_values
 
     def algolia_index(name = nil)
       puts "\n\ntypesense_index: Creates collection and its alias.\n\n"
