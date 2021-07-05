@@ -1011,21 +1011,21 @@ module AlgoliaSearch
       end
     end
 
-    # def algolia_indexing_disabled?(options = nil)
-    #   options ||= algoliasearch_options
-    #   constraint = options[:disable_indexing] || options["disable_indexing"]
-    #   case constraint
-    #   when nil
-    #     return false
-    #   when true, false
-    #     return constraint
-    #   when String, Symbol
-    #     return send(constraint)
-    #   else
-    #     return constraint.call if constraint.respond_to?(:call) # Proc
-    #   end
-    #   raise ArgumentError, "Unknown constraint type: #{constraint} (#{constraint.class})"
-    # end
+    def algolia_indexing_disabled?(options = nil)
+      options ||= algoliasearch_options
+      constraint = options[:disable_indexing] || options["disable_indexing"]
+      case constraint
+      when nil
+        return false
+      when true, false
+        return constraint
+      when String, Symbol
+        return send(constraint)
+      else
+        return constraint.call if constraint.respond_to?(:call) # Proc
+      end
+      raise ArgumentError, "Unknown constraint type: #{constraint} (#{constraint.class})"
+    end
 
     def algolia_find_in_batches(batch_size, &block)
       if (defined?(::ActiveRecord) && ancestors.include?(::ActiveRecord::Base)) || respond_to?(:find_in_batches)
@@ -1108,31 +1108,31 @@ module AlgoliaSearch
       self.class.algolia_remove_from_index!(self)#, synchronous || algolia_synchronous?)
     end
 
-    def algolia_enqueue_remove_from_index!(synchronous)
+    def algolia_enqueue_remove_from_index!()#synchronous)
       if algoliasearch_options[:enqueue]
         algoliasearch_options[:enqueue].call(self, true) unless self.class.send(:algolia_indexing_disabled?, algoliasearch_options)
       else
-        algolia_remove_from_index!(synchronous || algolia_synchronous?)
+        algolia_remove_from_index!()#synchronous || algolia_synchronous?)
       end
     end
 
-    def algolia_enqueue_index!(synchronous)
+    def algolia_enqueue_index!()#synchronous)
       if algoliasearch_options[:enqueue]
         algoliasearch_options[:enqueue].call(self, false) unless self.class.send(:algolia_indexing_disabled?, algoliasearch_options)
       else
-        algolia_index!(synchronous)
+        algolia_index!()#synchronous)
       end
     end
 
     private
 
-    def algolia_synchronous?
-      @algolia_synchronous == true
-    end
+    # def algolia_synchronous?
+    #   @algolia_synchronous == true
+    # end
 
-    def algolia_mark_synchronous
-      @algolia_synchronous = true
-    end
+    # def algolia_mark_synchronous
+    #   @algolia_synchronous = true
+    # end
 
     def algolia_mark_for_auto_indexing
       @algolia_auto_indexing = true
@@ -1151,9 +1151,9 @@ module AlgoliaSearch
 
     def algolia_perform_index_tasks
       return if !@algolia_auto_indexing || @algolia_must_reindex == false
-      algolia_enqueue_index!(algolia_synchronous?)
+      algolia_enqueue_index!()#algolia_synchronous?)
       remove_instance_variable(:@algolia_auto_indexing) if instance_variable_defined?(:@algolia_auto_indexing)
-      remove_instance_variable(:@algolia_synchronous) if instance_variable_defined?(:@algolia_synchronous)
+      #remove_instance_variable(:@algolia_synchronous) if instance_variable_defined?(:@algolia_synchronous)
       remove_instance_variable(:@algolia_must_reindex) if instance_variable_defined?(:@algolia_must_reindex)
     end
   end
