@@ -12,7 +12,16 @@ require 'logger'
 require 'sequel'
 require 'active_model_serializers'
 
-AlgoliaSearch.configuration = { :application_id => ENV['ALGOLIA_APPLICATION_ID'], :api_key => ENV['ALGOLIA_API_KEY'], :symbolize_keys => false }
+#AlgoliaSearch.configuration = { :application_id => ENV['ALGOLIA_APPLICATION_ID'], :api_key => ENV['ALGOLIA_API_KEY'], :symbolize_keys => false }
+AlgoliaSearch.configuration = {
+  nodes: [{
+    host: "localhost",   # For Typesense Cloud use xxx.a1.typesense.net
+    port: 8108,          # For Typesense Cloud use 443
+    protocol: "http",         # For Typesense Cloud use https
+  }],
+  api_key: "xyz",
+  connection_timeout_seconds: 2,
+}
 
 FileUtils.rm( 'data.sqlite3' ) rescue nil
 ActiveRecord::Base.logger = Logger.new(STDOUT)
@@ -1275,7 +1284,17 @@ end
 describe 'Kaminari' do
   before(:all) do
     require 'kaminari'
-    AlgoliaSearch.configuration = { :application_id => ENV['ALGOLIA_APPLICATION_ID'], :api_key => ENV['ALGOLIA_API_KEY'], :pagination_backend => :kaminari }
+    #AlgoliaSearch.configuration = { :application_id => ENV['ALGOLIA_APPLICATION_ID'], :api_key => ENV['ALGOLIA_API_KEY'], :pagination_backend => :kaminari }
+    AlgoliaSearch.configuration = {
+  nodes: [{
+    host: "localhost",   # For Typesense Cloud use xxx.a1.typesense.net
+    port: 8108,          # For Typesense Cloud use 443
+    protocol: "http",         # For Typesense Cloud use https
+  }],
+  api_key: "xyz",
+  connection_timeout_seconds: 2,
+}
+
   end
 
   it "should paginate" do
@@ -1297,7 +1316,17 @@ end
 describe 'Will_paginate' do
   before(:all) do
     require 'will_paginate'
-    AlgoliaSearch.configuration = { :application_id => ENV['ALGOLIA_APPLICATION_ID'], :api_key => ENV['ALGOLIA_API_KEY'], :pagination_backend => :will_paginate }
+    #AlgoliaSearch.configuration = { :application_id => ENV['ALGOLIA_APPLICATION_ID'], :api_key => ENV['ALGOLIA_API_KEY'], :pagination_backend => :will_paginate }
+    AlgoliaSearch.configuration = {
+  nodes: [{
+    host: "localhost",   # For Typesense Cloud use xxx.a1.typesense.net
+    port: 8108,          # For Typesense Cloud use 443
+    protocol: "http",         # For Typesense Cloud use https
+  }],
+  api_key: "xyz",
+  connection_timeout_seconds: 2,
+}
+
   end
 
   it "should paginate" do
