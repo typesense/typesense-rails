@@ -584,7 +584,7 @@ module AlgoliaSearch
              attributes = attributes.to_hash
             end
             #convert to JSON object
-            attributes.merge("id" => algolia_object_id_of(o, options)).to_json
+            attributes.merge!("id" => algolia_object_id_of(o, options)).to_json
           end
           #last_task = index.save_objects(objects)
           #converting to JSONL
@@ -633,7 +633,7 @@ module AlgoliaSearch
           #   # select only indexable objects
           #   group = group.select { |o| algolia_indexable?(o, tmp_options) }
           # end
-          documents= group.map { |o| tmp_settings.get_attributes(o).merge("id" => algolia_object_id_of(o, tmp_options)).to_json }
+          documents= group.map { |o| tmp_settings.get_attributes(o).merge!("id" => algolia_object_id_of(o, tmp_options)).to_json }
           #tmp_index.save_objects(objects)
           jsonl_object=documents.join("\n")
           created_documents=self.import_documents(jsonl_object,'upsert',tmp_index_name)
@@ -671,7 +671,7 @@ module AlgoliaSearch
         #next if algolia_indexing_disabled?(options)
         collectionObj = algolia_ensure_init(options,settings)
         #next if options[:replica]
-        documents=objects.map { |o| settings.get_attributes(o).merge("id" => algolia_object_id_of(o, options)).to_json }
+        documents=objects.map { |o| settings.get_attributes(o).merge!("id" => algolia_object_id_of(o, options)).to_json }
         jsonl_object=documents.join("\n")
         created_documents=self.import_documents(jsonl_object,'upsert',collectionObj[:alias_name])
         puts "\n\n#{objects.length} objects upserted into #{collectionObj[:collection_name]}!\n\n"
@@ -696,7 +696,8 @@ module AlgoliaSearch
           # else
             #index.save_object(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
           # end
-          self.upsert_document(settings.get_attributes(object).merge("id" => object_id),collectionObj[:alias_name])
+          puts settings.get_attributes(object).merge!"id" => object_id
+          self.upsert_document(settings.get_attributes(object).merge!("id" => object_id),collectionObj[:alias_name])
           puts "\n\nDocument upserted into #{collectionObj[:collection_name]} :\n\t#{self.retrieve_document(object_id,collectionObj[:alias_name])}\n\n"
         # elsif algolia_conditional_index?(options) && !object_id.blank?
         #   remove non-indexable objects

@@ -11,7 +11,7 @@ require 'algoliasearch-rails'
 require 'rspec'
 require 'rails/all'
 
-raise "missing ALGOLIA_APPLICATION_ID or ALGOLIA_API_KEY environment variables" if ENV['ALGOLIA_APPLICATION_ID'].nil? || ENV['ALGOLIA_API_KEY'].nil?
+#raise "missing ALGOLIA_APPLICATION_ID or ALGOLIA_API_KEY environment variables" if ENV['ALGOLIA_APPLICATION_ID'].nil? || ENV['ALGOLIA_API_KEY'].nil?
 
 Thread.current[:algolia_hosts] = nil
 
@@ -30,8 +30,13 @@ RSpec.configure do |c|
   # Remove all indexes setup in this run in local or CI
   c.after(:suite) do
     safe_index_list.each do |i|
-      index = AlgoliaSearch.client.init_index(i['name'])
-      index.delete!
+      index = i['name']
+      # AlgoliaSearch.client.collections.create(
+      #   { "name" => index,
+      #     "fields" => [{ "name" => ".*", "type" => "auto" }] }
+      # )
+      #index.delete!
+      AlgoliaSearch.client.collections[index].delete
     end
   end
 end
@@ -46,7 +51,8 @@ end
 
 # get a list of safe indexes in local or CI
 def safe_index_list
-  list = AlgoliaSearch.client.list_indexes['items']
+  list = AlgoliaSearch.client.collections.retrieve
   list = list.select { |index| index["name"].include?(SAFE_INDEX_PREFIX) }
-  list.sort_by { |index| index["primary"] || "" }
+  #list.sort_by { |index| index["primary"] || "" }
+  list
 end
