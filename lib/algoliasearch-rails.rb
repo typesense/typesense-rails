@@ -726,7 +726,11 @@ module AlgoliaSearch
         # else
           #index.delete_object(object_id)
         # end
-        self.delete_document(object_id,collectionObj[:alias_name])
+        begin
+          self.delete_document(object_id,collectionObj[:alias_name])
+        rescue Typesense::Error::ObjectNotFound => e
+          puts "\n\nObject #{object_id} could not be removed from #{collectionObj[:collection_name]} collection! Use reindex to update the collection.\n\n"
+        end
         puts "\n\nRemoved document with object id '#{object_id}' from #{collectionObj[:collection_name]}\n\n"
       end
       nil
