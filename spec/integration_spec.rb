@@ -149,11 +149,11 @@ class Product < ActiveRecord::Base
       [name, name] # multiple tags
     end
 
-    # synonyms [
-    #   ['iphone', 'applephone', 'iBidule'],
-    #   ['apple', 'pomme'],
-    #   ['samsung', 'galaxy']
-    # ]
+    synonyms [
+      ['iphone', 'applephone', 'iBidule'],
+      ['apple', 'pomme'],
+      ['samsung', 'galaxy']
+    ]
   end
 
   def tags=(names)
@@ -179,7 +179,6 @@ class Color < ActiveRecord::Base
     tags do
       name # single tag
     end
-
     # we're using all attributes of the Color class + the _tag "extra" attribute
   end
 
@@ -500,34 +499,34 @@ if defined?(ActiveModel::Serializer)
   end
 end
 
-# if defined?(ActiveModel::Serializer)
-#   # describe 'SerializedObject' do
-#   #   before(:all) do
-#   #     SerializedObject.clear_index!()
-#   #   end
+if defined?(ActiveModel::Serializer)
+  describe 'SerializedObject' do
+    before(:all) do
+      SerializedObject.clear_index!()
+    end
 
-#   #   it "should push the name but not the other attribute" do
-#   #     o = SerializedObject.new :name => 'test', :skip => 'skip me'
-#   #     attributes = SerializedObject.algoliasearch_settings.get_attributes(o)
-#   #     expect(attributes).to eq({:name => 'test', "_tags" => ['tag1', 'tag2']})
-#   #   end
-#   # end
-# end
+    it "should push the name but not the other attribute" do
+      o = SerializedObject.new :name => 'test', :skip => 'skip me'
+      attributes = SerializedObject.algoliasearch_settings.get_attributes(o)
+      expect(attributes).to eq({:name => 'test', "_tags" => ['tag1', 'tag2']})
+    end
+  end
+end
 
-# describe 'Encoding' do
-#   before(:all) do
-#     EncodedString.clear_index!()
-#   end
+describe 'Encoding' do
+  before(:all) do
+    EncodedString.clear_index!()
+  end
 
-#   if Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f > 1.8
-#     it "should convert to utf-8" do
-#       EncodedString.create!
-#       results = EncodedString.raw_search ''
-#       expect(results['hits'].size).to eq(1)
-#       expect(results['hits'].first['value']).to eq("\xC2\xA0\xE2\x80\xA2\xC2\xA0".force_encoding('utf-8'))
-#     end
-#   end
-# end
+  if Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f > 1.8
+    it "should convert to utf-8" do
+      EncodedString.create!
+      results = EncodedString.raw_search('',{'query_by'=>'value'})
+      expect(results['hits'].size).to eq(1)
+      expect(results['hits'].first['document']['value']).to eq("\xC2\xA0\xE2\x80\xA2\xC2\xA0".force_encoding('utf-8'))
+    end
+  end
+end
 
 # describe 'Too big records' do
 #   before(:all) do
@@ -546,89 +545,89 @@ end
 
 # end
 
-# describe 'Settings' do
+describe 'Settings' do
 
-#   it "should detect settings changes" do
-#     Color.send(:algoliasearch_settings_changed?, nil, {}).should == true
-#     Color.send(:algoliasearch_settings_changed?, {}, {"searchableAttributes" => ["name"]}).should == true
-#     Color.send(:algoliasearch_settings_changed?, {"searchableAttributes" => ["name"]}, {"searchableAttributes" => ["name", "hex"]}).should == true
-#     Color.send(:algoliasearch_settings_changed?, {"searchableAttributes" => ["name"]}, {"customRanking" => ["asc(hex)"]}).should == true
-#   end
+  it "should detect settings changes" do
+    Color.send(:algoliasearch_settings_changed?, nil, {}).should == true
+    Color.send(:algoliasearch_settings_changed?, {}, {"searchableAttributes" => ["name"]}).should == true
+    Color.send(:algoliasearch_settings_changed?, {"searchableAttributes" => ["name"]}, {"searchableAttributes" => ["name", "hex"]}).should == true
+    Color.send(:algoliasearch_settings_changed?, {"searchableAttributes" => ["name"]}, {"customRanking" => ["asc(hex)"]}).should == true
+  end
 
-#   it "should not detect settings changes" do
-#     Color.send(:algoliasearch_settings_changed?, {}, {}).should == false
-#     Color.send(:algoliasearch_settings_changed?, {"searchableAttributes" => ["name"]}, {:searchableAttributes => ["name"]}).should == false
-#     Color.send(:algoliasearch_settings_changed?, {"searchableAttributes" => ["name"], "customRanking" => ["asc(hex)"]}, {"customRanking" => ["asc(hex)"]}).should == false
-#   end
+  it "should not detect settings changes" do
+    Color.send(:algoliasearch_settings_changed?, {}, {}).should == false
+    Color.send(:algoliasearch_settings_changed?, {"searchableAttributes" => ["name"]}, {:searchableAttributes => ["name"]}).should == false
+    Color.send(:algoliasearch_settings_changed?, {"searchableAttributes" => ["name"], "customRanking" => ["asc(hex)"]}, {"customRanking" => ["asc(hex)"]}).should == false
+  end
 
-# end
+end
 
-# describe 'Change detection' do
+describe 'Change detection' do
 
-#   it "should detect attribute changes" do
-#     color = Color.new :name => "dark-blue", :short_name => "blue"
+  it "should detect attribute changes" do
+    color = Color.new :name => "dark-blue", :short_name => "blue"
 
-#     Color.algolia_must_reindex?(color).should == true
-#     color.save
-#     Color.algolia_must_reindex?(color).should == false
+    Color.algolia_must_reindex?(color).should == true
+    color.save
+    Color.algolia_must_reindex?(color).should == false
 
-#     color.hex = 123456
-#     Color.algolia_must_reindex?(color).should == false
+    color.hex = 123456
+    Color.algolia_must_reindex?(color).should == false
 
-#     color.not_indexed = "strstr"
-#     Color.algolia_must_reindex?(color).should == false
-#     color.name = "red"
-#     Color.algolia_must_reindex?(color).should == true
+    color.not_indexed = "strstr"
+    Color.algolia_must_reindex?(color).should == false
+    color.name = "red"
+    Color.algolia_must_reindex?(color).should == true
 
-#     color.delete
-#   end
+    color.delete
+  end
 
-#   it "should detect attribute changes even in a transaction" do
-#     color = Color.new :name => "dark-blue", :short_name => "blue"
-#     color.save
+  # it "should detect attribute changes even in a transaction" do
+  #   color = Color.new :name => "dark-blue", :short_name => "blue"
+  #   color.save
 
-#     color.instance_variable_get("@algolia_must_reindex").should == nil
-#     Color.transaction do
-#       color.name = "red"
-#       color.save
-#       color.not_indexed = "strstr"
-#       color.save
-#       color.instance_variable_get("@algolia_must_reindex").should == true
-#     end
-#     color.instance_variable_get("@algolia_must_reindex").should == nil
+  #   color.instance_variable_get("@algolia_must_reindex").should == nil
+  #   Color.transaction do
+  #     color.name = "red"
+  #     color.save
+  #     color.not_indexed = "strstr"
+  #     color.save
+  #     color.instance_variable_get("@algolia_must_reindex").should == true
+  #   end
+  #   color.instance_variable_get("@algolia_must_reindex").should == nil
 
-#     color.delete
-#   end
+  #   color.delete
+  # end
 
-#   it "should detect change with algolia_dirty? method" do
-#     ebook = Ebook.new :name => "My life", :author => "Myself", :premium => false, :released => true
+  # it "should detect change with algolia_dirty? method" do
+  #   ebook = Ebook.new :name => "My life", :author => "Myself", :premium => false, :released => true
 
-#     Ebook.algolia_must_reindex?(ebook).should == true # Because it's defined in algolia_dirty? method
-#     ebook.current_time = 10
-#     ebook.published_at = 8
-#     Ebook.algolia_must_reindex?(ebook).should == true
-#     ebook.published_at = 12
-#     Ebook.algolia_must_reindex?(ebook).should == false
-#   end
+  #   Ebook.algolia_must_reindex?(ebook).should == true # Because it's defined in algolia_dirty? method
+  #   ebook.current_time = 10
+  #   ebook.published_at = 8
+  #   Ebook.algolia_must_reindex?(ebook).should == true
+  #   ebook.published_at = 12
+  #   Ebook.algolia_must_reindex?(ebook).should == false
+  # end
 
-#   it "should know if the _changed? method is user-defined", :skip => Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9 do
-#     color = Color.new :name => "dark-blue", :short_name => "blue"
+  # it "should know if the _changed? method is user-defined", :skip => Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9 do
+  #   color = Color.new :name => "dark-blue", :short_name => "blue"
 
-#     expect { Color.send(:automatic_changed_method?, color, :something_that_doesnt_exist) }.to raise_error(ArgumentError)
+  #   expect { Color.send(:automatic_changed_method?, color, :something_that_doesnt_exist) }.to raise_error(ArgumentError)
 
-#     Color.send(:automatic_changed_method?, color, :name_changed?).should == true
-#     Color.send(:automatic_changed_method?, color, :hex_changed?).should == false
+  #   Color.send(:automatic_changed_method?, color, :name_changed?).should == true
+  #   Color.send(:automatic_changed_method?, color, :hex_changed?).should == false
 
-#     Color.send(:automatic_changed_method?, color, :will_save_change_to_short_name?).should == false
+  #   Color.send(:automatic_changed_method?, color, :will_save_change_to_short_name?).should == false
 
-#     if Color.send(:automatic_changed_method_deprecated?)
-#       Color.send(:automatic_changed_method?, color, :will_save_change_to_name?).should == true
-#       Color.send(:automatic_changed_method?, color, :will_save_change_to_hex?).should == true
-#     end
+  #   if Color.send(:automatic_changed_method_deprecated?)
+  #     Color.send(:automatic_changed_method?, color, :will_save_change_to_name?).should == true
+  #     Color.send(:automatic_changed_method?, color, :will_save_change_to_hex?).should == true
+  #   end
 
-#   end
+  # end
 
-# end
+end
 
 # describe 'Namespaced::Model' do
 #   before(:all) do

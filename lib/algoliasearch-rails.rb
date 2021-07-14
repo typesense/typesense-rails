@@ -49,7 +49,7 @@ module AlgoliaSearch
 
     # AlgoliaSearch settings
     OPTIONS = [
- # # Attributes
+          # # Attributes
            # :searchableAttributes, :attributesForFaceting, :unretrievableAttributes, :attributesToRetrieve,
            # # Ranking
            # :ranking, :customRanking, # Replicas are handled via `add_replica`
@@ -78,7 +78,7 @@ module AlgoliaSearch
            # :maxFacetHits,
 
      # # Rails-specific
-           # :synonyms, :placeholders, :altCorrections,
+            :synonyms, :placeholders, :altCorrections,
       ]
     OPTIONS.each do |k|
       define_method k do |v|
@@ -417,8 +417,12 @@ module AlgoliaSearch
        self.typesense_client.aliases[alias_name].retrieve
     end
 
-    def create_document(object,collection)
+    def create_document(object,collection,dirtyvalues=nil)
       raise ArgumentError.new("Object is required") unless object
+      puts dirtyvalues
+      if dirtyvalues
+        self.typesense_client.collections[collection].documents.create(object, dirty_values: dirtyvalues)
+      end
       self.typesense_client.collections[collection].documents.create(object)
     end
 
@@ -684,29 +688,35 @@ module AlgoliaSearch
 
     def algolia_index!(object)#, synchronous = false)
        puts "\n\ntypesense_index!: Creates a document for the object and retrieves it.\n\n"
-      #return if algolia_without_auto_index_scope
+       puts object.to_json
+      return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
-        #next if algolia_indexing_disabled?(options)
+        next if algolia_indexing_disabled?(options)
         object_id = algolia_object_id_of(object, options)
         collectionObj = algolia_ensure_init(options,settings)
         #next if options[:replica]
-        #if algolia_indexable?(object, options)
+        if algolia_indexable?(object, options)
           raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
           # if synchronous || options[:synchronous]
           #   index.save_object!(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
           # else
             #index.save_object(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
           # end
-          self.create_document(settings.get_attributes(object).merge!("id"=> object_id),collectionObj[:alias_name])
+          if options[:dirty_values]
+            self.create_document(settings.get_attributes(object).merge!("id"=> object_id),collectionObj[:alias_name],options[:dirty_values])
+          else
+            self.create_document(settings.get_attributes(object).merge!("id"=> object_id),collectionObj[:alias_name])
+          end
           puts "\n\nDocument upserted into #{collectionObj[:collection_name]} :\n\t#{self.retrieve_document(object_id,collectionObj[:alias_name])}\n\n"
-        # elsif algolia_conditional_index?(options) && !object_id.blank?
-        #   remove non-indexable objects
-        #   if synchronous || options[:synchronous]
-        #     index.delete_object!(object_id)
-        #   else
-        #     index.delete_object(object_id)
-        #   end
-        # end
+         elsif algolia_conditional_index?(options) && !object_id.blank?
+          #   remove non-indexable objects
+          #   if synchronous || options[:synchronous]
+          #     index.delete_object!(object_id)
+          #   else
+          #     index.delete_object(object_id)
+          #   end
+          self.delete_document(object_id,collectionObj[:collection_name])
+        end
       end
       nil
     end
@@ -904,6 +914,7 @@ module AlgoliaSearch
         collection_name=self.get_alias(alias_name)["collection_name"]
       else
         self.create_collection(collection_name)
+        puts self.get_collection(collection_name)
         self.upsert_alias(collection_name,alias_name)
       end
       @algolia_indexes[settings] = {collection_name: collection_name,alias_name: alias_name}#SafeIndex.new(algolia_index_name(options))#, algoliasearch_options[:raise_on_failure])
