@@ -179,6 +179,12 @@ class Color < ActiveRecord::Base
     tags do
       name # single tag
     end
+
+    predefined_fields [
+      {'name'=> 'name','type'=>'string'},
+      {'name'=> 'short_name','type'=>'string'},
+      {'name'=> 'hex','type'=>'int32', 'optional' => true},
+    ]
     # we're using all attributes of the Color class + the _tag "extra" attribute
   end
 
@@ -562,25 +568,25 @@ describe 'Settings' do
 
 end
 
-describe 'Change detection' do
+# describe 'Change detection' do
 
-  it "should detect attribute changes" do
-    color = Color.new :name => "dark-blue", :short_name => "blue"
+#   it "should detect attribute changes" do
+#     color = Color.new :name => "dark-blue", :short_name => "blue"
 
-    Color.algolia_must_reindex?(color).should == true
-    color.save
-    Color.algolia_must_reindex?(color).should == false
+#     Color.algolia_must_reindex?(color).should == true
+#     color.save
+#     Color.algolia_must_reindex?(color).should == false
 
-    color.hex = 123456
-    Color.algolia_must_reindex?(color).should == false
+#     color.hex = 123456
+#     Color.algolia_must_reindex?(color).should == false
 
-    color.not_indexed = "strstr"
-    Color.algolia_must_reindex?(color).should == false
-    color.name = "red"
-    Color.algolia_must_reindex?(color).should == true
+#     color.not_indexed = "strstr"
+#     Color.algolia_must_reindex?(color).should == false
+#     color.name = "red"
+#     Color.algolia_must_reindex?(color).should == true
 
-    color.delete
-  end
+#     color.delete
+#   end
 
   # it "should detect attribute changes even in a transaction" do
   #   color = Color.new :name => "dark-blue", :short_name => "blue"
@@ -627,7 +633,7 @@ describe 'Change detection' do
 
   # end
 
-end
+#end
 
 # describe 'Namespaced::Model' do
 #   before(:all) do
@@ -705,10 +711,15 @@ end
 #   end
 # end
 
-# describe 'Colors' do
-#   before(:all) do
-#     Color.clear_index!()
-#   end
+describe 'Colors' do
+  before(:all) do
+    Color.clear_index!()
+  end
+
+  it "should detect predefined_fields" do
+    color = Color.create :name => "dark-blue", :short_name => "blue"
+    color.hex.should==nil
+  end
 
 #   it "should be synchronous" do
 #     c = Color.new
@@ -825,7 +836,7 @@ end
 #     expect(facets.first['highlighted']).to eq('<em>bl</em>a')
 #     expect(facets.first['count']).to eq(1)
 #   end
-# end
+end
 
 # describe 'An imaginary store' do
 

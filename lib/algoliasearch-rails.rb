@@ -79,6 +79,7 @@ module AlgoliaSearch
 
      # # Rails-specific
             :synonyms, :placeholders, :altCorrections,
+            :predefined_fields
       ]
     OPTIONS.each do |k|
       define_method k do |v|
@@ -272,9 +273,9 @@ module AlgoliaSearch
     #   add_index(index_name, options.merge({ :replica => true, :primary_settings => self }), &block)
     # end
 
-    def additional_indexes
-      @additional_indexes || {}
-    end
+    # def additional_indexes
+    #   @additional_indexes || {}
+    # end
   end
 
   #Default queueing system
@@ -287,7 +288,7 @@ module AlgoliaSearch
 
   #this class wraps an Algolia::Index object ensuring all raised exceptions
   #are correctly logged or thrown depending on the `raise_on_failure` option
-  class SafeIndex
+  #class SafeIndex
 
     # def initialize(name)#, raise_on_failure)
 
@@ -349,7 +350,7 @@ module AlgoliaSearch
     #     end
     #   end
     # end
-  end
+  #end
 
   # these are the class methods added when AlgoliaSearch is included
   module ClassMethods
@@ -380,12 +381,19 @@ module AlgoliaSearch
       self.get_collection(collectionObj[:alias_name])
     end
 
-    def create_collection(collection_name)
+    def create_collection(collection_name,fields=nil)
       begin
-      self.typesense_client.collections.create(
-        { "name" => collection_name,
-          "fields" => [{ "name" => ".*", "type" => "auto" }] }
-      )
+        if fields
+          self.typesense_client.collections.create(
+          { "name" => collection_name,
+            "fields" => fields }
+          )
+        else
+          self.typesense_client.collections.create(
+          { "name" => collection_name,
+            "fields" => [{ "name" => ".*", "type" => "auto" }] }
+          )
+        end
       puts "\n\nCollection '#{collection_name}' created!\n\n"
       rescue Typesense::Error::ObjectAlreadyExists => e
         puts "\n\nCollection already exists!\n\n"
@@ -629,7 +637,7 @@ module AlgoliaSearch
         # if options[:check_settings] == false
           #@client.copy_index!(src_index_name, tmp_index_name, %w(settings synonyms rules))
           #tmp_index = SafeIndex.new(tmp_index_name)#, !!options[:raise_on_failure])
-          self.create_collection(src_index_name)
+          self.create_collection(src_index_name,settings.get_setting(:predefined_fields))
         # else
         #   tmp_index = algolia_ensure_init(tmp_options, tmp_settings, master_settings)
         # end
@@ -702,10 +710,12 @@ module AlgoliaSearch
           # else
             #index.save_object(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
           # end
+          object=settings.get_attributes(object).merge!("id"=> object_id)
+          puts object
           if options[:dirty_values]
-            self.create_document(settings.get_attributes(object).merge!("id"=> object_id),collectionObj[:alias_name],options[:dirty_values])
+            self.create_document(object,collectionObj[:alias_name],options[:dirty_values])
           else
-            self.create_document(settings.get_attributes(object).merge!("id"=> object_id),collectionObj[:alias_name])
+            self.create_document(object,collectionObj[:alias_name])
           end
           puts "\n\nDocument upserted into #{collectionObj[:collection_name]} :\n\t#{self.retrieve_document(object_id,collectionObj[:alias_name])}\n\n"
          elsif algolia_conditional_index?(options) && !object_id.blank?
@@ -913,7 +923,7 @@ module AlgoliaSearch
       if self.collection_present?(alias_name)
         collection_name=self.get_alias(alias_name)["collection_name"]
       else
-        self.create_collection(collection_name)
+        self.create_collection(collection_name,settings.get_setting(:predefined_fields))
         puts self.get_collection(collection_name)
         self.upsert_alias(collection_name,alias_name)
       end
@@ -944,15 +954,15 @@ module AlgoliaSearch
       if @configurations.nil?
         @configurations = {}
         @configurations[algoliasearch_options] = algoliasearch_settings
-        algoliasearch_settings.additional_indexes.each do |k, v|
-          @configurations[k] = v
+        # algoliasearch_settings.additional_indexes.each do |k, v|
+        #   @configurations[k] = v
 
-          if v.additional_indexes.any?
-            v.additional_indexes.each do |options, index|
-              @configurations[options] = index
-            end
-          end
-        end
+        #   if v.additional_indexes.any?
+        #     v.additional_indexes.each do |options, index|
+        #       @configurations[options] = index
+        #     end
+        #   end
+        # end
       end
       @configurations
     end
