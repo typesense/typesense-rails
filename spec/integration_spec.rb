@@ -53,7 +53,7 @@ ActiveRecord::Schema.define do
   create_table :products do |t|
     t.string :name
     t.string :href
-    t.string :tags
+    # t.string :tags
     t.string :type
     t.text :description
     t.datetime :release_date
@@ -144,10 +144,10 @@ class Product < ActiveRecord::Base
     :if => :published?, :unless => lambda { |o| o.href.blank? },
     :index_name => safe_index_name("my_products_index") do
 
-    attribute :href, :name, :tags
-    tags do
-      [name, name] # multiple tags
-    end
+    attribute :href, :name#, :tags
+    # tags do
+    #   [name, name] # multiple tags
+    # end
 
     synonyms [
       ['iphone', 'applephone', 'iBidule'],
@@ -156,9 +156,9 @@ class Product < ActiveRecord::Base
     ]
   end
 
-  def tags=(names)
-    @tags = names.join(",")
-  end
+  # def tags=(names)
+  #   @tags = names.join(",")
+  # end
 
   def published?
     release_date.blank? || release_date <= Time.now
@@ -176,9 +176,9 @@ class Color < ActiveRecord::Base
     # searchableAttributes ['name']
     # attributesForFaceting ['searchable(short_name)']
     # customRanking ["asc(hex)"]
-    tags do
-      name # single tag
-    end
+    # tags do
+    #   name # single tag
+    # end
 
     predefined_fields [
       {'name'=> 'name','type'=>'string'},
@@ -196,9 +196,9 @@ class Color < ActiveRecord::Base
     false
   end
 
-  def will_save_change_to__tags?
-    false
-  end
+  # def will_save_change_to__tags?
+  #   false
+  # end
 end
 
 class DisabledBoolean < ActiveRecord::Base
@@ -242,7 +242,7 @@ class Namespaced::Model < ActiveRecord::Base
       id
     end
     # searchableAttributes ['customAttr']
-    tags ['static_tag1', 'static_tag2']
+    # tags ['static_tag1', 'static_tag2']
   end
 end
 
@@ -390,9 +390,9 @@ class Book < ActiveRecord::Base
 
   algoliasearch  :index_name => safe_index_name("SecuredBook"), :per_environment => true, :sanitize => true do
     # searchableAttributes ['name']
-    tags do
-      [premium ? 'premium' : 'standard', released ? 'public' : 'private']
-    end
+    # tags do
+    #   [premium ? 'premium' : 'standard', released ? 'public' : 'private']
+    # end
 
     # add_index safe_index_name('BookAuthor'), :per_environment => true do
     #   searchableAttributes ['author']
@@ -498,9 +498,9 @@ if defined?(ActiveModel::Serializer)
     algoliasearch :index_name => safe_index_name('SerializedObject') do
       use_serializer SerializedObjectSerializer
 
-      tags do
-        ['tag1', 'tag2']
-      end
+      # tags do
+      #   ['tag1', 'tag2']
+      # end
     end
   end
 end
@@ -514,7 +514,7 @@ if defined?(ActiveModel::Serializer)
     it "should push the name but not the other attribute" do
       o = SerializedObject.new :name => 'test', :skip => 'skip me'
       attributes = SerializedObject.algoliasearch_settings.get_attributes(o)
-      expect(attributes).to eq({:name => 'test', "_tags" => ['tag1', 'tag2']})
+      expect(attributes).to eq({:name => 'test'})#, "_tags" => ['tag1', 'tag2']})
     end
   end
 end
