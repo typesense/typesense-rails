@@ -568,72 +568,72 @@ describe 'Settings' do
 
 end
 
-# describe 'Change detection' do
+describe 'Change detection' do
 
-#   it "should detect attribute changes" do
-#     color = Color.new :name => "dark-blue", :short_name => "blue"
+  it "should detect attribute changes" do
+    color = Color.new :name => "dark-blue", :short_name => "blue"
 
-#     Color.algolia_must_reindex?(color).should == true
-#     color.save
-#     Color.algolia_must_reindex?(color).should == false
+    Color.algolia_must_reindex?(color).should == true
+    color.save
+    Color.algolia_must_reindex?(color).should == false
 
-#     color.hex = 123456
-#     Color.algolia_must_reindex?(color).should == false
+    color.hex = 123456
+    Color.algolia_must_reindex?(color).should == false
 
-#     color.not_indexed = "strstr"
-#     Color.algolia_must_reindex?(color).should == false
-#     color.name = "red"
-#     Color.algolia_must_reindex?(color).should == true
+    color.not_indexed = "strstr"
+    Color.algolia_must_reindex?(color).should == false
+    color.name = "red"
+    Color.algolia_must_reindex?(color).should == true
 
-#     color.delete
-#   end
+    color.delete
+  end
 
-  # it "should detect attribute changes even in a transaction" do
-  #   color = Color.new :name => "dark-blue", :short_name => "blue"
-  #   color.save
+  it "should detect attribute changes even in a transaction" do
+    color = Color.new :name => "dark-blue", :short_name => "blue"
+    color.save
 
-  #   color.instance_variable_get("@algolia_must_reindex").should == nil
-  #   Color.transaction do
-  #     color.name = "red"
-  #     color.save
-  #     color.not_indexed = "strstr"
-  #     color.save
-  #     color.instance_variable_get("@algolia_must_reindex").should == true
-  #   end
-  #   color.instance_variable_get("@algolia_must_reindex").should == nil
+    color.instance_variable_get("@algolia_must_reindex").should == nil
+    Color.transaction do
+      color.name = "red"
+      color.save
+      color.not_indexed = "strstr"
+      color.save
+      color.instance_variable_get("@algolia_must_reindex").should == true
+    end
+    color.instance_variable_get("@algolia_must_reindex").should == nil
 
-  #   color.delete
-  # end
+    color.delete
+  end
 
-  # it "should detect change with algolia_dirty? method" do
-  #   ebook = Ebook.new :name => "My life", :author => "Myself", :premium => false, :released => true
+  it "should detect change with algolia_dirty? method" do
+    ebook = Ebook.new :name => "My life", :author => "Myself", :premium => false, :released => true
 
-  #   Ebook.algolia_must_reindex?(ebook).should == true # Because it's defined in algolia_dirty? method
-  #   ebook.current_time = 10
-  #   ebook.published_at = 8
-  #   Ebook.algolia_must_reindex?(ebook).should == true
-  #   ebook.published_at = 12
-  #   Ebook.algolia_must_reindex?(ebook).should == false
-  # end
+    Ebook.algolia_must_reindex?(ebook).should == true # Because it's defined in algolia_dirty? method
+    ebook.current_time = 10
+    ebook.published_at = 8
+    Ebook.algolia_must_reindex?(ebook).should == true
+    ebook.published_at = 12
+    Ebook.algolia_must_reindex?(ebook).should == false
+  end
 
-  # it "should know if the _changed? method is user-defined", :skip => Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9 do
-  #   color = Color.new :name => "dark-blue", :short_name => "blue"
+  it "should know if the _changed? method is user-defined", :skip => Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9 do
+    color = Color.new :name => "dark-blue", :short_name => "blue"
 
-  #   expect { Color.send(:automatic_changed_method?, color, :something_that_doesnt_exist) }.to raise_error(ArgumentError)
+    expect { Color.send(:automatic_changed_method?, color, :something_that_doesnt_exist) }.to raise_error(ArgumentError)
 
-  #   Color.send(:automatic_changed_method?, color, :name_changed?).should == true
-  #   Color.send(:automatic_changed_method?, color, :hex_changed?).should == false
+    Color.send(:automatic_changed_method?, color, :name_changed?).should == true
+    Color.send(:automatic_changed_method?, color, :hex_changed?).should == false
 
-  #   Color.send(:automatic_changed_method?, color, :will_save_change_to_short_name?).should == false
+    Color.send(:automatic_changed_method?, color, :will_save_change_to_short_name?).should == false
 
-  #   if Color.send(:automatic_changed_method_deprecated?)
-  #     Color.send(:automatic_changed_method?, color, :will_save_change_to_name?).should == true
-  #     Color.send(:automatic_changed_method?, color, :will_save_change_to_hex?).should == true
-  #   end
+    if Color.send(:automatic_changed_method_deprecated?)
+      Color.send(:automatic_changed_method?, color, :will_save_change_to_name?).should == true
+      Color.send(:automatic_changed_method?, color, :will_save_change_to_hex?).should == true
+    end
 
-  # end
+  end
 
-#end
+end
 
 # describe 'Namespaced::Model' do
 #   before(:all) do
@@ -711,15 +711,15 @@ end
 #   end
 # end
 
-describe 'Colors' do
-  before(:all) do
-    Color.clear_index!()
-  end
+# describe 'Colors' do
+#   before(:all) do
+#     Color.clear_index!()
+#   end
 
-  it "should detect predefined_fields" do
-    color = Color.create :name => "dark-blue", :short_name => "blue"
-    color.hex.should==nil
-  end
+#   it "should detect predefined_fields" do
+#     color = Color.create :name => "dark-blue", :short_name => "blue"
+#     color.hex.should==nil
+#   end
 
 #   it "should be synchronous" do
 #     c = Color.new
@@ -836,7 +836,7 @@ describe 'Colors' do
 #     expect(facets.first['highlighted']).to eq('<em>bl</em>a')
 #     expect(facets.first['count']).to eq(1)
 #   end
-end
+#end
 
 # describe 'An imaginary store' do
 

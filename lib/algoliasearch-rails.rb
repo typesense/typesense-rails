@@ -425,13 +425,13 @@ module AlgoliaSearch
        self.typesense_client.aliases[alias_name].retrieve
     end
 
-    def create_document(object,collection,dirtyvalues=nil)
+    def upsert_document(object,collection,dirtyvalues=nil)
       raise ArgumentError.new("Object is required") unless object
       puts dirtyvalues
       if dirtyvalues
-        self.typesense_client.collections[collection].documents.create(object, dirty_values: dirtyvalues)
+        self.typesense_client.collections[collection].documents.upsert(object, dirty_values: dirtyvalues)
       end
-      self.typesense_client.collections[collection].documents.create(object)
+      self.typesense_client.collections[collection].documents.upsert(object)
     end
 
     def import_documents(jsonl_object,action,collection)
@@ -713,9 +713,9 @@ module AlgoliaSearch
           object=settings.get_attributes(object).merge!("id"=> object_id)
           puts object
           if options[:dirty_values]
-            self.create_document(object,collectionObj[:alias_name],options[:dirty_values])
+            self.upsert_document(object,collectionObj[:alias_name],options[:dirty_values])
           else
-            self.create_document(object,collectionObj[:alias_name])
+            self.upsert_document(object,collectionObj[:alias_name])
           end
           puts "\n\nDocument upserted into #{collectionObj[:collection_name]} :\n\t#{self.retrieve_document(object_id,collectionObj[:alias_name])}\n\n"
          elsif algolia_conditional_index?(options) && !object_id.blank?
