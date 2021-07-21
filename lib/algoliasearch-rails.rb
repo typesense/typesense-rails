@@ -370,15 +370,9 @@ module AlgoliaSearch
         alias_method :index, :algolia_index unless method_defined? :index
         alias_method :index_name, :algolia_index_name unless method_defined? :index_name
         alias_method :must_reindex?, :algolia_must_reindex? unless method_defined? :must_reindex?
-        alias_method :typesense_collection_schema, :typesense_collection_schema unless method_defined? :collection_schema
       end
 
       base.cattr_accessor :algoliasearch_options, :algoliasearch_settings,:typesense_client
-    end
-
-    def typesense_collection_schema
-      collectionObj = algolia_ensure_init()
-      self.get_collection(collectionObj[:alias_name])
     end
 
     def create_collection(collection_name,fields=nil)
@@ -405,20 +399,15 @@ module AlgoliaSearch
     end
 
     def get_collection(collection)
-       self.typesense_client.collections[collection].retrieve
+      begin
+       return self.typesense_client.collections[collection].retrieve
+      rescue Typesense::Error::ObjectNotFound => e
+        return nil
+      end
     end
 
     def num_documents(collection)
       self.typesense_client.collections[collection].retrieve["num_documents"]
-    end
-
-    def collection_present?(collection)
-      begin
-        self.get_collection(collection)
-        return true
-      rescue Typesense::Error::ObjectNotFound => e
-        return false
-      end
     end
 
     def get_alias(alias_name)
@@ -439,8 +428,13 @@ module AlgoliaSearch
       self.typesense_client.collections[collection].documents.import(jsonl_object, action: action)
     end
 
-    def retrieve_document(object_id,collection)
+    def retrieve_document(object_id,collection=nil)
+      if collection
       self.typesense_client.collections[collection].documents[object_id].retrieve
+      else
+        collectionObj=algolia_ensure_init()
+        self.typesense_client.collections[collectionObj[:alias_name]].documents[object_id].retrieve
+      end
     end
 
     def delete_document(object_id,collection)
@@ -916,11 +910,11 @@ module AlgoliaSearch
       options ||= algoliasearch_options
       settings ||= algoliasearch_settings
 
-      return @algolia_indexes[settings] if @algolia_indexes[settings] and  self.collection_present?(@algolia_indexes[settings][:alias_name])
+      return @algolia_indexes[settings] if @algolia_indexes[settings] and  self.get_collection(@algolia_indexes[settings][:alias_name])
 
       collection_name=algolia_index_name(options)
       alias_name=collection_name+"_alias"
-      if self.collection_present?(alias_name)
+      if self.get_collection(alias_name)
         collection_name=self.get_alias(alias_name)["collection_name"]
       else
         self.create_collection(collection_name,settings.get_setting(:predefined_fields))

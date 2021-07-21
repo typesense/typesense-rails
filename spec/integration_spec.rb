@@ -635,81 +635,81 @@ describe 'Change detection' do
 
 end
 
-# describe 'Namespaced::Model' do
-#   before(:all) do
-#     Namespaced::Model.index.clear_objects!
-#   end
+describe 'Namespaced::Model' do
+  before(:all) do
+    Namespaced::Model.clear_index!()
+  end
 
-#   it "should have an index name without :: hierarchy" do
-#     (Namespaced::Model.index_name.end_with?("Namespaced_Model")).should == true
-#   end
+  it "should have an index name without :: hierarchy" do
+    (Namespaced::Model.index_name.end_with?("Namespaced_Model")).should == true
+  end
 
-#   it "should use the block to determine attribute's value" do
-#     m = Namespaced::Model.new(:another_private_value => 2)
-#     attributes = Namespaced::Model.algoliasearch_settings.get_attributes(m)
-#     attributes['customAttr'].should == 42
-#     attributes['myid'].should == m.id
-#   end
+  it "should use the block to determine attribute's value" do
+    m = Namespaced::Model.new(:another_private_value => 2)
+    attributes = Namespaced::Model.algoliasearch_settings.get_attributes(m)
+    attributes['customAttr'].should == 42
+    attributes['myid'].should == m.id
+  end
 
-#   it "should always update when there is no custom _changed? function" do
-#     m = Namespaced::Model.new(:another_private_value => 2)
-#     m.save
-#     results = Namespaced::Model.search(42)
-#     expect(results.size).to eq(1)
-#     expect(results[0].id).to eq(m.id)
+  # it "should always update when there is no custom _changed? function" do
+  #   m = Namespaced::Model.new(:another_private_value => 2)
+  #   m.save
+  #   results = Namespaced::Model.search(42,{'query_by'=>'customAttr'})
+  #   expect(results.size).to eq(1)
+  #   expect(results[0].id).to eq(m.id)
 
-#     m.another_private_value = 5
-#     m.save
+  #   m.another_private_value = 5
+  #   m.save
 
-#     results = Namespaced::Model.search(42)
-#     expect(results.size).to eq(0)
+  #   results = Namespaced::Model.search(42,{'query_by'=>'customAttr'})
+  #   expect(results.size).to eq(0)
 
-#     results = Namespaced::Model.search(45)
-#     expect(results.size).to eq(1)
-#     expect(results[0].id).to eq(m.id)
-#   end
-# end
+  #   results = Namespaced::Model.search(45,{'query_by'=>'customAttr'})
+  #   expect(results.size).to eq(1)
+  #   expect(results[0].id).to eq(m.id)
+  # end
+end
 
-# describe 'UniqUsers' do
-#   before(:all) do
-#     UniqUser.clear_index!()
-#   end
+describe 'UniqUsers' do
+  before(:all) do
+    UniqUser.clear_index!()
+  end
 
-#   it "should not use the id field" do
-#     UniqUser.create :name => 'fooBar'
-#     results = UniqUser.search('foo')
-#     expect(results.size).to eq(1)
-#   end
-# end
+  it "should not use the id field" do
+    UniqUser.create :name => 'fooBar'
+    results = UniqUser.search('foo',{'query_by'=>'name'})
+    expect(results.size).to eq(1)
+  end
+end
 
-# describe 'NestedItem' do
-#   before(:all) do
-#     NestedItem.clear_index!() rescue nil # not fatal
-#   end
+describe 'NestedItem' do
+  before(:all) do
+    NestedItem.clear_index!() rescue nil # not fatal
+  end
 
-#   it "should fetch attributes unscoped" do
-#     @i1 = NestedItem.create :hidden => false
-#     @i2 = NestedItem.create :hidden => true
+  it "should fetch attributes unscoped" do
+    @i1 = NestedItem.create :hidden => false
+    @i2 = NestedItem.create :hidden => true
 
-#     @i1.children << NestedItem.create(:hidden => true) << NestedItem.create(:hidden => true)
-#     NestedItem.where(:id => [@i1.id, @i2.id]).reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE, true)
+    @i1.children << NestedItem.create(:hidden => true) << NestedItem.create(:hidden => true)
+    NestedItem.where(:id => [@i1.id, @i2.id]).reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)#, true)
 
-#     result = NestedItem.index.get_object(@i1.id)
-#     result['nb_children'].should == 2
+    result = NestedItem.retrieve_document(@i1.id)
+    result['nb_children'].should == 2
 
-#     result = NestedItem.raw_search('')
-#     result['nbHits'].should == 1
+    result = NestedItem.raw_search('',{'query_by'=>'id'})
+    result['found'].should == 1
 
-#     if @i2.respond_to? :update_attributes
-#       @i2.update_attributes :hidden => false
-#     else
-#       @i2.update :hidden => false
-#     end
+    if @i2.respond_to? :update_attributes
+      @i2.update_attributes :hidden => false
+    else
+      @i2.update :hidden => false
+    end
 
-#     result = NestedItem.raw_search('')
-#     result['nbHits'].should == 2
-#   end
-# end
+    result = NestedItem.raw_search('',{'query_by'=>'id'})
+    result['found'].should == 2
+  end
+end
 
 # describe 'Colors' do
 #   before(:all) do
