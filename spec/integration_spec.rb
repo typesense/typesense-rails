@@ -358,7 +358,7 @@ describe 'SequelBook' do
 
   it "should index the book" do
     @steve_jobs = SequelBook.create :name => 'Steve Jobs', :author => 'Walter Isaacson', :premium => true, :released => true
-    results = SequelBook.search('steve',{'query_by'=>'name'})
+    results = SequelBook.search('steve','name')
     expect(results.size).to eq(1)
     expect(results[0].id).to eq(@steve_jobs.id)
   end
@@ -527,7 +527,7 @@ describe 'Encoding' do
   if Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f > 1.8
     it "should convert to utf-8" do
       EncodedString.create!
-      results = EncodedString.raw_search('',{'query_by'=>'value'})
+      results = EncodedString.raw_search('','value')
       expect(results['hits'].size).to eq(1)
       expect(results['hits'].first['document']['value']).to eq("\xC2\xA0\xE2\x80\xA2\xC2\xA0".force_encoding('utf-8'))
     end
@@ -677,7 +677,7 @@ describe 'UniqUsers' do
 
   it "should not use the id field" do
     UniqUser.create :name => 'fooBar'
-    results = UniqUser.search('foo',{'query_by'=>'name'})
+    results = UniqUser.search('foo','name')
     expect(results.size).to eq(1)
   end
 end
@@ -697,7 +697,7 @@ describe 'NestedItem' do
     result = NestedItem.retrieve_document(@i1.id)
     result['nb_children'].should == 2
 
-    result = NestedItem.raw_search('',{'query_by'=>'id'})
+    result = NestedItem.raw_search('','id')
     result['found'].should == 1
 
     if @i2.respond_to? :update_attributes
@@ -706,7 +706,7 @@ describe 'NestedItem' do
       @i2.update :hidden => false
     end
 
-    result = NestedItem.raw_search('',{'query_by'=>'id'})
+    result = NestedItem.raw_search('','id')
     result['found'].should == 2
   end
 end

@@ -376,7 +376,6 @@ module AlgoliaSearch
     end
 
     def create_collection(collection_name,fields=nil)
-      begin
         if fields
           self.typesense_client.collections.create(
           { "name" => collection_name,
@@ -385,13 +384,10 @@ module AlgoliaSearch
         else
           self.typesense_client.collections.create(
           { "name" => collection_name,
-            "fields" => [{ "name" => ".*", "type" => "auto" }] }
+            "fields" => [{"name" =>"id","type" => "string"},{ "name" => ".*", "type" => "auto" }] }
           )
         end
       puts "\n\nCollection '#{collection_name}' created!\n\n"
-      rescue Typesense::Error::ObjectAlreadyExists => e
-        puts "\n\nCollection already exists!\n\n"
-      end
     end
 
     def upsert_alias(collection_name,alias_name)
@@ -440,10 +436,15 @@ module AlgoliaSearch
     def delete_document(object_id,collection)
       self.typesense_client.collections[collection].documents[object_id].delete
     end
+      def delete_by_query(collection,query)
+      self.typesense_client.collections[collection].documents.delete('filter_by': query)
+    end
 
     def delete_collection(collection)
        self.typesense_client.collections[collection].delete
     end
+
+
 
     def search_collection(search_parameters,collection)
       self.typesense_client.collections[collection].documents.search(search_parameters)
@@ -577,13 +578,14 @@ module AlgoliaSearch
         # last_task = nil
 
         algolia_find_in_batches(batch_size) do |group|
-          # if algolia_conditional_index?(options)
-          #   # delete non-indexable objects
-          #   ids = group.select { |o| !algolia_indexable?(o, options) }.map { |o| algolia_object_id_of(o, options) }
-          #   index.delete_objects(ids.select { |id| !id.blank? })
-          #   # select only indexable objects
-          #   group = group.select { |o| algolia_indexable?(o, options) }
-          # end
+          if algolia_conditional_index?(options)
+            # delete non-indexable objects
+            # ids = group.select { |o| !algolia_indexable?(o, options) }.map { |o| algolia_object_id_of(o, options) }
+            # self.delete_by_query(collectionObj[:alias_name],`id: #{ids}`)
+            # index.delete_objects(ids.select { |id| !id.blank? })
+            # select only indexable objects
+            group = group.select { |o| algolia_indexable?(o, options) }
+          end
           documents = group.map do |o|
             attributes = settings.get_attributes(o)
             unless attributes.class == Hash
@@ -598,6 +600,7 @@ module AlgoliaSearch
           created_documents=self.import_documents(jsonl_object,'upsert',collectionObj[:alias_name])
         end
         puts "\n\nAll objects reindexed! #{self.num_documents(collectionObj[:alias_name])} documents upserted.\n\n"
+        puts self.get_collection(collectionObj[:alias_name])
         # index.wait_task(last_task.raw_response["taskID"]) if last_task and (synchronous || options[:synchronous])
       end
       nil
@@ -636,10 +639,10 @@ module AlgoliaSearch
         #   tmp_index = algolia_ensure_init(tmp_options, tmp_settings, master_settings)
         # end
         algolia_find_in_batches(batch_size) do |group|
-          # if algolia_conditional_index?(options)
-          #   # select only indexable objects
-          #   group = group.select { |o| algolia_indexable?(o, tmp_options) }
-          # end
+          if algolia_conditional_index?(options)
+            # select only indexable objects
+            group = group.select { |o| algolia_indexable?(o, tmp_options) }
+          end
           documents= group.map { |o| tmp_settings.get_attributes(o).merge!("id" => algolia_object_id_of(o, tmp_options)).to_json }
           #tmp_index.save_objects(objects)
           jsonl_object=documents.join("\n")
@@ -712,14 +715,18 @@ module AlgoliaSearch
             self.upsert_document(object,collectionObj[:alias_name])
           end
           puts "\n\nDocument upserted into #{collectionObj[:collection_name]} :\n\t#{self.retrieve_document(object_id,collectionObj[:alias_name])}\n\n"
-         elsif algolia_conditional_index?(options) && !object_id.blank?
+        elsif algolia_conditional_index?(options) && !object_id.blank?
           #   remove non-indexable objects
           #   if synchronous || options[:synchronous]
           #     index.delete_object!(object_id)
           #   else
           #     index.delete_object(object_id)
           #   end
+          begin
           self.delete_document(object_id,collectionObj[:collection_name])
+          rescue Typesense::Error::ObjectNotFound => e
+            puts "Object not found in index: #{e.message}"
+          end
         end
       end
       nil
@@ -763,14 +770,14 @@ module AlgoliaSearch
       nil
     end
 
-    def algolia_raw_search(q, params = {})
+    def algolia_raw_search(q,query_by, params = {})
       puts "\n\ntypesense_raw_search: JSON output of search.\n\n"
       # index_name = params.delete(:index) ||
       #              params.delete("index") ||
       #              params.delete(:replica) ||
       #              params.delete("replica")
       collectionObj = algolia_index()#index_name)
-      self.search_collection(params.merge({'q': q}),collectionObj[:alias_name])
+      self.search_collection(params.merge({'q': q,'query_by': query_by }),collectionObj[:alias_name])
       # index.search(q, Hash[params.map { |k, v| [k.to_s, v.to_s] }])
     end
 
@@ -797,14 +804,14 @@ module AlgoliaSearch
       end
     end
 
-    def algolia_search(q, params = {})
+    def algolia_search(q,query_by, params = {})
       puts "\n\ntypsense_search: Searches and returns matching objects from the database.\n\n"
       # if AlgoliaSearch.configuration[:pagination_backend]
       #   # kaminari and will_paginate start pagination at 1, Algolia starts at 0
       #   params[:page] = (params.delete("page") || params.delete(:page)).to_i
       #   params[:page] -= 1 if params[:page].to_i > 0
       # end
-      json = algolia_raw_search(q, params)
+      json = algolia_raw_search(q,query_by, params)
       hit_ids = json["hits"].map { |hit| hit["document"]["id"] }
 
       if defined?(::Mongoid::Document) && self.include?(::Mongoid::Document)
