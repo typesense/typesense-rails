@@ -181,10 +181,13 @@ class Color < ActiveRecord::Base
     # end
 
     predefined_fields [
-      {'name'=> 'name','type'=>'string'},
-      {'name'=> 'short_name','type'=>'string'},
-      {'name'=> 'hex','type'=>'int32', 'optional' => true},
+      {'name'=> 'name','type'=>'string',"facet"=>true},
+      {'name'=> 'short_name','type'=>'string',"index"=>false,'optional' => true},
+      {'name'=> 'hex','type'=>'int32'},
     ]
+
+    default_sorting_field "hex"
+
     # we're using all attributes of the Color class + the _tag "extra" attribute
   end
 
@@ -571,7 +574,7 @@ end
 describe 'Change detection' do
 
   it "should detect attribute changes" do
-    color = Color.new :name => "dark-blue", :short_name => "blue"
+    color = Color.new :name => "dark-blue", :short_name => "blue", :hex=> 123
 
     Color.algolia_must_reindex?(color).should == true
     color.save
@@ -589,7 +592,7 @@ describe 'Change detection' do
   end
 
   it "should detect attribute changes even in a transaction" do
-    color = Color.new :name => "dark-blue", :short_name => "blue"
+    color = Color.new :name => "dark-blue", :short_name => "blue" ,:hex=> 123
     color.save
 
     color.instance_variable_get("@algolia_must_reindex").should == nil
@@ -617,7 +620,7 @@ describe 'Change detection' do
   end
 
   it "should know if the _changed? method is user-defined", :skip => Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9 do
-    color = Color.new :name => "dark-blue", :short_name => "blue"
+    color = Color.new :name => "dark-blue", :short_name => "blue",:hex=> 123
 
     expect { Color.send(:automatic_changed_method?, color, :something_that_doesnt_exist) }.to raise_error(ArgumentError)
 
@@ -633,7 +636,7 @@ describe 'Change detection' do
 
   end
 
-end
+ end
 
 describe 'Namespaced::Model' do
   before(:all) do
@@ -651,23 +654,23 @@ describe 'Namespaced::Model' do
     attributes['myid'].should == m.id
   end
 
-  # it "should always update when there is no custom _changed? function" do
-  #   m = Namespaced::Model.new(:another_private_value => 2)
-  #   m.save
-  #   results = Namespaced::Model.search(42,{'query_by'=>'customAttr'})
-  #   expect(results.size).to eq(1)
-  #   expect(results[0].id).to eq(m.id)
+  it "should always update when there is no custom _changed? function" do
+    m = Namespaced::Model.new(:another_private_value => 2)
+    m.save
+    results = Namespaced::Model.search('*','',{'filter_by'=>'customAttr:42'})
+    expect(results.size).to eq(1)
+    expect(results[0].id).to eq(m.id)
 
-  #   m.another_private_value = 5
-  #   m.save
+    m.another_private_value = 5
+    m.save
 
-  #   results = Namespaced::Model.search(42,{'query_by'=>'customAttr'})
-  #   expect(results.size).to eq(0)
+    results = Namespaced::Model.search('*','',{'filter_by'=>'customAttr:42'})
+    expect(results.size).to eq(0)
 
-  #   results = Namespaced::Model.search(45,{'query_by'=>'customAttr'})
-  #   expect(results.size).to eq(1)
-  #   expect(results[0].id).to eq(m.id)
-  # end
+    results = Namespaced::Model.search('*','',{'filter_by'=>'customAttr:45'})
+    expect(results.size).to eq(1)
+    expect(results[0].id).to eq(m.id)
+  end
 end
 
 describe 'UniqUsers' do
@@ -711,132 +714,134 @@ describe 'NestedItem' do
   end
 end
 
-# describe 'Colors' do
-#   before(:all) do
-#     Color.clear_index!()
-#   end
+describe 'Colors' do
+  before(:all) do
+    Color.clear_index!()
+  end
 
-#   it "should detect predefined_fields" do
-#     color = Color.create :name => "dark-blue", :short_name => "blue"
-#     color.hex.should==nil
-#   end
+  it "should detect predefined_fields" do
+    color = Color.create :name => "dark-blue" ,:hex=> 123
+    color.short_name.should==nil
+  end
 
-#   it "should be synchronous" do
-#     c = Color.new
-#     c.valid?
-#     c.send(:algolia_synchronous?).should == true
-#   end
+  # it "should be synchronous" do
+  #   c = Color.new
+  #   c.valid?
+  #   c.send(:algolia_synchronous?).should == true
+  # end
 
-#   it "should auto index" do
-#     @blue = Color.create!(:name => "blue", :short_name => "b", :hex => 0xFF0000)
-#     results = Color.search("blue")
-#     expect(results.size).to eq(1)
-#     results.should include(@blue)
-#   end
+  it "should auto index" do
+    @blue = Color.create!(:name => "blue", :short_name => "b", :hex => 0xFF0000)
+    results = Color.search("blue","name")
+    expect(results.size).to eq(1)
+    results.should include(@blue)
+  end
 
-#   it "should return facet as well" do
-#     results = Color.search("", :facets => '*')
-#     results.raw_answer.should_not be_nil
-#     results.facets.should_not be_nil
-#     results.facets.size.should eq(1)
-#     results.facets['short_name']['b'].should eq(1)
-#   end
+  it "should facet as well" do
+    results = Color.search("*","",{"facet_by" => 'name'})
+    puts results.raw_answer
+    results.raw_answer.should_not be_nil
+    results.raw_answer["facet_counts"].should_not be_nil
+    results.raw_answer["facet_counts"].size.should eq(1)
+    results.raw_answer["facet_counts"][0]["counts"][0]["count"].should eq(1)
+  end
 
-#   it "should be raw searchable" do
-#     results = Color.raw_search("blue")
-#     results['hits'].size.should eq(1)
-#     results['nbHits'].should eq(1)
-#   end
+  it "should be raw searchable" do
+    results = Color.raw_search("blue","name")
+    results['hits'].size.should eq(1)
+    results['found'].should eq(1)
+  end
 
-#   it "should not auto index if scoped" do
-#     Color.without_auto_index do
-#       Color.create!(:name => "blue", :short_name => "b", :hex => 0xFF0000)
-#     end
-#     expect(Color.search("blue").size).to eq(1)
-#     Color.reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE, true)
-#     expect(Color.search("blue").size).to eq(2)
-#   end
+  it "should not auto index if scoped" do
+    Color.without_auto_index do
+      Color.create!(:name => "blue", :short_name => "b", :hex => 0xFF0000)
+    end
+    expect(Color.search("blue","name").size).to eq(1)
+    Color.reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)#, true)
+    expect(Color.search("blue","name").size).to eq(2)
+  end
 
-#   it "should not be searchable with non-indexed fields" do
-#     @blue = Color.create!(:name => "blue", :short_name => "x", :hex => 0xFF0000)
-#     results = Color.search("x")
-#     expect(results.size).to eq(0)
-#   end
+  it "should not be searchable with non-indexed fields" do
+    @blue = Color.create!(:name => "blue", :short_name => "x", :hex => 0xFF0000)
+    expect {results = Color.search("x","short_name")}.to raise_error(Typesense::Error)
+    # expect(results.size).to eq(0)
+  end
 
-#   it "should rank with custom hex" do
-#     @blue = Color.create!(:name => "red", :short_name => "r3", :hex => 3)
-#     @blue2 = Color.create!(:name => "red", :short_name => "r1", :hex => 1)
-#     @blue3 = Color.create!(:name => "red", :short_name => "r2", :hex => 2)
-#     results = Color.search("red")
-#     expect(results.size).to eq(3)
-#     results[0].hex.should eq(1)
-#     results[1].hex.should eq(2)
-#     results[2].hex.should eq(3)
-#   end
+  it "should rank with default_sorting_field hex" do
+    @blue = Color.create!(:name => "red", :short_name => "r3", :hex => 3)
+    @blue2 = Color.create!(:name => "red", :short_name => "r1", :hex => 1)
+    @blue3 = Color.create!(:name => "red", :short_name => "r2", :hex => 2)
+    results = Color.search("red","name")
+    puts results.raw_answer
+    expect(results.size).to eq(3)
+    results[0].hex.should eq(3)
+    results[1].hex.should eq(2)
+    results[2].hex.should eq(1)
+  end
 
-#   it "should update the index if the attribute changed" do
-#     @purple = Color.create!(:name => "purple", :short_name => "p")
-#     expect(Color.search("purple").size).to eq(1)
-#     expect(Color.search("pink").size).to eq(0)
-#     @purple.name = "pink"
-#     @purple.save
-#     expect(Color.search("purple").size).to eq(0)
-#     expect(Color.search("pink").size).to eq(1)
-#   end
+  it "should update the index if the attribute changed" do
+    @purple = Color.create!(:name => "purple", :short_name => "p",:hex=> 123)
+    expect(Color.search("purple","name").size).to eq(1)
+    expect(Color.search("pink","name").size).to eq(0)
+    @purple.name = "pink"
+    @purple.save
+    expect(Color.search("purple","name").size).to eq(0)
+    expect(Color.search("pink","name").size).to eq(1)
+  end
 
-#   it "should use the specified scope" do
-#     Color.clear_index!()
-#     Color.where(:name => 'red').reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE, true)
-#     expect(Color.search("").size).to eq(3)
-#     Color.clear_index!()
-#     Color.where(:id => Color.first.id).reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE, true)
-#     expect(Color.search("").size).to eq(1)
-#   end
+  it "should use the specified scope" do
+    Color.clear_index!()
+    Color.where(:name => 'red').reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)#, true)
+    expect(Color.search("*","").size).to eq(3)
+    Color.clear_index!()
+    Color.where(:id => Color.first.id).reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)#, true)
+    expect(Color.search("*","").size).to eq(1)
+  end
 
-#   it "should have a Rails env-based index name" do
-#     Color.index_name.should == safe_index_name("Color") + "_#{Rails.env}"
-#   end
+  it "should have a Rails env-based index name" do
+    Color.index_name.should == safe_index_name("Color") + "_#{Rails.env}"
+  end
 
-#   it "should add tags" do
-#     @blue = Color.create!(:name => "green", :short_name => "b", :hex => 0xFF0000)
-#     results = Color.search("green", { :tagFilters => 'green' })
-#     expect(results.size).to eq(1)
-#     results.should include(@blue)
-#   end
+  # it "should add tags" do
+  #   @blue = Color.create!(:name => "green", :short_name => "b", :hex => 0xFF0000)
+  #   results = Color.search("green", { :tagFilters => 'green' })
+  #   expect(results.size).to eq(1)
+  #   results.should include(@blue)
+  # end
 
-#   it "should include the _highlightResult and _snippetResults" do
-#     results = Color.search("gre", :attributesToSnippet => ['name'], :attributesToHighlight => ['name'])
-#     expect(results.size).to eq(1)
-#     expect(results[0].highlight_result).to_not be_nil
-#     expect(results[0].snippet_result).to_not be_nil
-#   end
+  # it "should include the _highlightResult and _snippetResults" do
+  #   results = Color.search("gre", :attributesToSnippet => ['name'], :attributesToHighlight => ['name'])
+  #   expect(results.size).to eq(1)
+  #   expect(results[0].highlight_result).to_not be_nil
+  #   expect(results[0].snippet_result).to_not be_nil
+  # end
 
-#   it "should index an array of objects" do
-#     json = Color.raw_search('')
-#     Color.index_objects Color.limit(1), true # reindex last color, `limit` is incompatible with the reindex! method
-#     json['nbHits'].should eq(Color.raw_search('')['nbHits'])
-#   end
+  it "should index an array of objects" do
+    json = Color.raw_search('*',"")
+    Color.index_objects Color.limit(1)#, true # reindex last color, `limit` is incompatible with the reindex! method
+    json['found'].should eq(Color.raw_search('*',"")['found'])
+  end
 
-#   it "should not index non-saved object" do
-#     expect { Color.new(:name => 'purple').index!(true) }.to raise_error(ArgumentError)
-#     expect { Color.new(:name => 'purple').remove_from_index!(true) }.to raise_error(ArgumentError)
-#   end
+  it "should not index non-saved object" do
+    expect { Color.new(:name => 'purple').index!(true) }.to raise_error(ArgumentError)
+    expect { Color.new(:name => 'purple').remove_from_index!(true) }.to raise_error(ArgumentError)
+  end
 
-#   it "should reindex with a temporary index name based on custom index name & per_environment" do
-#     Color.reindex
-#   end
+  it "should reindex with a temporary index name based on custom index name & per_environment" do
+    Color.reindex
+  end
 
-#   it "should search inside facets" do
-#     @blue = Color.create!(:name => "blue", :short_name => "blu", :hex => 0x0000FF)
-#     @black = Color.create!(:name => "black", :short_name => "bla", :hex => 0x000000)
-#     @green = Color.create!(:name => "green", :short_name => "gre", :hex => 0x00FF00)
-#     facets = Color.search_for_facet_values('short_name', 'bl', :query => 'black')
-#     expect(facets.size).to eq(1)
-#     expect(facets.first['value']).to eq('bla')
-#     expect(facets.first['highlighted']).to eq('<em>bl</em>a')
-#     expect(facets.first['count']).to eq(1)
-#   end
-#end
+  # it "should search inside facets" do
+  #   @blue = Color.create!(:name => "blue", :short_name => "blu", :hex => 0x0000FF)
+  #   @black = Color.create!(:name => "black", :short_name => "bla", :hex => 0x000000)
+  #   @green = Color.create!(:name => "green", :short_name => "gre", :hex => 0x00FF00)
+  #   facets = Color.search_for_facet_values('short_name', 'bl', :query => 'black')
+  #   expect(facets.size).to eq(1)
+  #   expect(facets.first['value']).to eq('bla')
+  #   expect(facets.first['highlighted']).to eq('<em>bl</em>a')
+  #   expect(facets.first['count']).to eq(1)
+  # end
+end
 
 # describe 'An imaginary store' do
 
@@ -1040,17 +1045,17 @@ end
 
 #   it "should be searchable using replica index" do
 #     r = City.index(safe_index_name('City_replica1')).search 'no land'
-#     r['nbHits'].should eq(1)
+#     r['found'].should eq(1)
 #   end
 
 #   it "should be searchable using replica index 2" do
 #     r = City.raw_search 'no land', :index => safe_index_name('City_replica1')
-#     r['nbHits'].should eq(1)
+#     r['found'].should eq(1)
 #   end
 
 #   it "should be searchable using replica index 3" do
 #     r = City.raw_search 'no land', :replica => safe_index_name('City_replica1')
-#     r['nbHits'].should eq(1)
+#     r['found'].should eq(1)
 #   end
 
 #   it "should be searchable using replica index 4" do
@@ -1084,7 +1089,7 @@ end
 #   end
 
 #   it "should browse" do
-#     total = City.index.search('')['nbHits']
+#     total = City.index.search('')['found']
 #     n = 0
 #     City.index.browse_objects do |hit|
 #       n += 1
@@ -1307,17 +1312,17 @@ end
 
 #   it "should paginate" do
 #     pagination = City.search ''
-#     pagination.total_count.should eq(City.raw_search('')['nbHits'])
+#     pagination.total_count.should eq(City.raw_search('')['found'])
 
 #     p1 = City.search '', :page => 1, :hitsPerPage => 1
 #     p1.size.should eq(1)
 #     p1[0].should eq(pagination[0])
-#     p1.total_count.should eq(City.raw_search('')['nbHits'])
+#     p1.total_count.should eq(City.raw_search('')['found'])
 
 #     p2 = City.search '', :page => 2, :hitsPerPage => 1
 #     p2.size.should eq(1)
 #     p2[0].should eq(pagination[1])
-#     p2.total_count.should eq(City.raw_search('')['nbHits'])
+#     p2.total_count.should eq(City.raw_search('')['found'])
 #   end
 # end
 
@@ -1341,7 +1346,7 @@ end
 #     p1 = City.search '', :hitsPerPage => 2
 #     p1.length.should eq(2)
 #     p1.per_page.should eq(2)
-#     p1.total_entries.should eq(City.raw_search('')['nbHits'])
+#     p1.total_entries.should eq(City.raw_search('')['found'])
 #   end
 # end
 

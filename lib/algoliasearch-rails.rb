@@ -79,7 +79,7 @@ module AlgoliaSearch
 
      # # Rails-specific
             :synonyms, :placeholders, :altCorrections,
-            :predefined_fields
+            :predefined_fields,:default_sorting_field
       ]
     OPTIONS.each do |k|
       define_method k do |v|
@@ -375,18 +375,13 @@ module AlgoliaSearch
       base.cattr_accessor :algoliasearch_options, :algoliasearch_settings,:typesense_client
     end
 
-    def create_collection(collection_name,fields=nil)
-        if fields
+    def create_collection(collection_name,fields=nil,default_sorting_field=nil)
           self.typesense_client.collections.create(
-          { "name" => collection_name,
-            "fields" => fields }
-          )
-        else
-          self.typesense_client.collections.create(
-          { "name" => collection_name,
-            "fields" => [{"name" =>"id","type" => "string"},{ "name" => ".*", "type" => "auto" }] }
-          )
-        end
+          {"name" => collection_name}
+            .merge(
+              fields ? {"fields" => fields.push({"name" =>"id","type" => "string"})} : {"fields" =>[{"name" =>"id","type" => "string"},{ "name" => ".*", "type" => "auto" }]},
+              default_sorting_field ? {"default_sorting_field" => default_sorting_field} : {} )
+        )
       puts "\n\nCollection '#{collection_name}' created!\n\n"
     end
 
@@ -572,7 +567,7 @@ module AlgoliaSearch
       puts "\n\ntypesense_reindex!: Reindexes all objects in database(does not remove deleted objects from the collection).\n\n"
       #return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
-        #next if algolia_indexing_disabled?(options)
+        next if algolia_indexing_disabled?(options)
         collectionObj = algolia_ensure_init(options,settings)
         #next if options[:replica]
         # last_task = nil
@@ -611,7 +606,7 @@ module AlgoliaSearch
       puts "\n\ntypesense_reindex: Reindexes whole database using alias(removes deleted objects from collection).\n\n"
       # return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
-        # next if algolia_indexing_disabled?(options)
+        next if algolia_indexing_disabled?(options)
         # next if options[:replica]
 
         # fetch the master settings
@@ -634,7 +629,7 @@ module AlgoliaSearch
         # if options[:check_settings] == false
           #@client.copy_index!(src_index_name, tmp_index_name, %w(settings synonyms rules))
           #tmp_index = SafeIndex.new(tmp_index_name)#, !!options[:raise_on_failure])
-          self.create_collection(src_index_name,settings.get_setting(:predefined_fields))
+          self.create_collection(src_index_name,settings.get_setting(:predefined_fields),settings.get_setting(:default_sorting_field))
         # else
         #   tmp_index = algolia_ensure_init(tmp_options, tmp_settings, master_settings)
         # end
@@ -678,7 +673,7 @@ module AlgoliaSearch
     def algolia_index_objects(objects)#, synchronous = false)
       puts "\n\ntypesense_index_objects: Upserts given object array into collection of given model.\n\n"
       algolia_configurations.each do |options, settings|
-        #next if algolia_indexing_disabled?(options)
+        next if algolia_indexing_disabled?(options)
         collectionObj = algolia_ensure_init(options,settings)
         #next if options[:replica]
         documents=objects.map { |o| settings.get_attributes(o).merge!("id" => algolia_object_id_of(o, options)).to_json }
@@ -738,7 +733,7 @@ module AlgoliaSearch
       object_id = algolia_object_id_of(object)
       raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
       algolia_configurations.each do |options, settings|
-        #next if algolia_indexing_disabled?(options)
+        next if algolia_indexing_disabled?(options)
         collectionObj = algolia_ensure_init(options,  settings)
         #next if options[:replica]
         # if synchronous || options[:synchronous]
@@ -759,7 +754,7 @@ module AlgoliaSearch
     def algolia_clear_index!()#synchronous = false)
       puts "\n\ntypesense_clear_index!: Delete collection of given model."
       algolia_configurations.each do |options, settings|
-        #next if algolia_indexing_disabled?(options)
+        next if algolia_indexing_disabled?(options)
         collectionObj = algolia_ensure_init(options,settings)
         #next if options[:replica]
         #synchronous || options[:synchronous] ? index.clear_objects! : index.clear_objects
@@ -924,7 +919,7 @@ module AlgoliaSearch
       if self.get_collection(alias_name)
         collection_name=self.get_alias(alias_name)["collection_name"]
       else
-        self.create_collection(collection_name,settings.get_setting(:predefined_fields))
+        self.create_collection(collection_name,settings.get_setting(:predefined_fields),settings.get_setting(:default_sorting_field))
         puts self.get_collection(collection_name)
         self.upsert_alias(collection_name,alias_name)
       end
