@@ -45,7 +45,7 @@ module AlgoliaSearch
   end
 
   class IndexSettings
-    DEFAULT_BATCH_SIZE = 1000
+    DEFAULT_BATCH_SIZE =250
 
     # AlgoliaSearch settings
     OPTIONS = [
@@ -574,9 +574,9 @@ module AlgoliaSearch
 
         algolia_find_in_batches(batch_size) do |group|
           if algolia_conditional_index?(options)
-            # delete non-indexable objects
-            # ids = group.select { |o| !algolia_indexable?(o, options) }.map { |o| algolia_object_id_of(o, options) }
-            # self.delete_by_query(collectionObj[:alias_name],`id: #{ids}`)
+            #delete non-indexable objects
+            ids = group.select { |o| !algolia_indexable?(o, options) }.map { |o| algolia_object_id_of(o, options) }
+            self.typesense_client.collections[collectionObj[:alias_name]].documents.delete('filter_by': 'id:'+ids.select { |id| !id.blank? }.to_s)
             # index.delete_objects(ids.select { |id| !id.blank? })
             # select only indexable objects
             group = group.select { |o| algolia_indexable?(o, options) }
