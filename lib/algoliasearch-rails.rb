@@ -407,7 +407,6 @@ module AlgoliaSearch
 
     def upsert_document(object,collection,dirtyvalues=nil)
       raise ArgumentError.new("Object is required") unless object
-      puts dirtyvalues
       if dirtyvalues
         self.typesense_client.collections[collection].documents.upsert(object, dirty_values: dirtyvalues)
       end
@@ -689,7 +688,6 @@ module AlgoliaSearch
 
     def algolia_index!(object)#, synchronous = false)
        puts "\n\ntypesense_index!: Creates a document for the object and retrieves it.\n\n"
-       puts object.to_json
       return if algolia_without_auto_index_scope
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
@@ -704,7 +702,7 @@ module AlgoliaSearch
             #index.save_object(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
           # end
           object=settings.get_attributes(object).merge!("id"=> object_id)
-          puts object
+
           if options[:dirty_values]
             self.upsert_document(object,collectionObj[:alias_name],options[:dirty_values])
           else
@@ -735,7 +733,7 @@ module AlgoliaSearch
       raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
-        collectionObj = algolia_ensure_init(options,  settings)
+        collectionObj = algolia_ensure_init(options,  settings,create: false)
         #next if options[:replica]
         # if synchronous || options[:synchronous]
         #   index.delete_object!(object_id)
@@ -756,7 +754,7 @@ module AlgoliaSearch
       puts "\n\ntypesense_clear_index!: Delete collection of given model."
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
-        collectionObj = algolia_ensure_init(options,settings)
+        collectionObj = algolia_ensure_init(options,settings,create: false)
         #next if options[:replica]
         #synchronous || options[:synchronous] ? index.clear_objects! : index.clear_objects
         self.delete_collection(collectionObj[:alias_name])
@@ -904,7 +902,7 @@ module AlgoliaSearch
 
     protected
 
-    def algolia_ensure_init(options=nil, settings=nil, index_settings=nil)
+    def algolia_ensure_init(options=nil, settings=nil, index_settings=nil,create=true)
 
       raise ArgumentError.new("No `algoliasearch` block found in your model.") if algoliasearch_settings.nil?
 
@@ -917,11 +915,12 @@ module AlgoliaSearch
 
       collection_name=algolia_index_name(options)
       alias_name=collection_name+"_alias"
+
       if self.get_collection(alias_name)
-        collection_name=self.get_alias(alias_name)["collection_name"]
+        #collection_name=self.get_alias(alias_name)["collection_name"]
       else
+        raise ArgumentError.new("#{collection_name} is not found in your model.") if not create
         self.create_collection(collection_name,settings.get_setting(:predefined_fields),settings.get_setting(:default_sorting_field))
-        puts self.get_collection(collection_name)
         self.upsert_alias(collection_name,alias_name)
       end
       @algolia_indexes[settings] = {collection_name: collection_name,alias_name: alias_name}#SafeIndex.new(algolia_index_name(options))#, algoliasearch_options[:raise_on_failure])
