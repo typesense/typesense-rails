@@ -370,12 +370,27 @@ module AlgoliaSearch
         alias_method :index, :algolia_index unless method_defined? :index
         alias_method :index_name, :algolia_index_name unless method_defined? :index_name
         alias_method :must_reindex?, :algolia_must_reindex? unless method_defined? :must_reindex?
+
+        alias_method :create_collection, :typesense_create_collection unless method_defined? :create_collection
+        alias_method :delete_collection, :typesense_delete_collection unless method_defined? :delete_collection
+        alias_method :upsert_alias, :typesense_upsert_alias unless method_defined? :upsert_alias
+        alias_method :get_collection, :typesense_get_collection unless method_defined? :get_collection
+        alias_method :num_documents, :typesense_num_documents unless method_defined? :num_documents
+        alias_method :get_alias, :typesense_get_alias unless method_defined? :get_alias
+        alias_method :upsert_document,:typesense_upsert_document unless method_defined? :upsert_document
+        alias_method :import_documents, :typesense_import_documents unless method_defined? :import_documents
+        alias_method :retrieve_document, :typesense_retrieve_document unless method_defined? :retrieve_document
+        alias_method :delete_document, :typesense_delete_document unless method_defined? :delete_document
+        alias_method :delete_collection, :typesense_delete_collection unless method_defined? :delete_collection
+        alias_method :delete_by_query, :typesense_delete_by_query unless method_defined? :delete_by_query
+        alias_method :search_collection, :typesense_search_collection unless method_defined? :search_collection
+
       end
 
       base.cattr_accessor :algoliasearch_options, :algoliasearch_settings,:typesense_client
     end
 
-    def create_collection(collection_name,fields=nil,default_sorting_field=nil)
+    def typesense_create_collection(collection_name,fields=nil,default_sorting_field=nil)
           self.typesense_client.collections.create(
           {"name" => collection_name}
             .merge(
@@ -385,11 +400,11 @@ module AlgoliaSearch
       puts "\n\nCollection '#{collection_name}' created!\n\n"
     end
 
-    def upsert_alias(collection_name,alias_name)
+    def typesense_upsert_alias(collection_name,alias_name)
       self.typesense_client.aliases.upsert(alias_name,{'collection_name' => collection_name})
     end
 
-    def get_collection(collection)
+    def typesense_get_collection(collection)
       begin
        return self.typesense_client.collections[collection].retrieve
       rescue Typesense::Error::ObjectNotFound => e
@@ -397,15 +412,15 @@ module AlgoliaSearch
       end
     end
 
-    def num_documents(collection)
+    def typesense_num_documents(collection)
       self.typesense_client.collections[collection].retrieve["num_documents"]
     end
 
-    def get_alias(alias_name)
+    def typesense_get_alias(alias_name)
        self.typesense_client.aliases[alias_name].retrieve
     end
 
-    def upsert_document(object,collection,dirtyvalues=nil)
+    def typesense_upsert_document(object,collection,dirtyvalues=nil)
       raise ArgumentError.new("Object is required") unless object
       if dirtyvalues
         self.typesense_client.collections[collection].documents.upsert(object, dirty_values: dirtyvalues)
@@ -413,12 +428,12 @@ module AlgoliaSearch
       self.typesense_client.collections[collection].documents.upsert(object)
     end
 
-    def import_documents(jsonl_object,action,collection)
+    def typesense_import_documents(jsonl_object,action,collection)
       raise ArgumentError.new("JSONL object is required") unless jsonl_object
       self.typesense_client.collections[collection].documents.import(jsonl_object, action: action)
     end
 
-    def retrieve_document(object_id,collection=nil)
+    def typesense_retrieve_document(object_id,collection=nil)
       if collection
       self.typesense_client.collections[collection].documents[object_id].retrieve
       else
@@ -427,20 +442,20 @@ module AlgoliaSearch
       end
     end
 
-    def delete_document(object_id,collection)
+    def typesense_delete_document(object_id,collection)
       self.typesense_client.collections[collection].documents[object_id].delete
     end
-      def delete_by_query(collection,query)
+    def typesense_delete_by_query(collection,query)
       self.typesense_client.collections[collection].documents.delete('filter_by': query)
     end
 
-    def delete_collection(collection)
+    def typesense_delete_collection(collection)
        self.typesense_client.collections[collection].delete
     end
 
 
 
-    def search_collection(search_parameters,collection)
+    def typesense_search_collection(search_parameters,collection)
       self.typesense_client.collections[collection].documents.search(search_parameters)
     end
 
