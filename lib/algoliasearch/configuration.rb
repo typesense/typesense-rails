@@ -11,7 +11,14 @@ module AlgoliaSearch
     end
 
     def configuration=(configuration)
+      if configuration.key?(:pagination_backend)
+        @pagination_backend = configuration.delete(:pagination_backend)
+      end
       @@configuration = configuration
+    end
+
+    def pagination_backend
+      @pagination_backend
     end
 
     def client

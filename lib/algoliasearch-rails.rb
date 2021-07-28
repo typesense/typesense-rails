@@ -222,12 +222,12 @@ module AlgoliaSearch
       end
     end
 
-    def geoloc(lat_attr = nil, lng_attr = nil, &block)
-      #raise ArgumentError.new("Cannot specify additional attributes on a replica index") if @options[:replica]
-      add_attribute :_geoloc do |o|
-        block_given? ? o.instance_eval(&block) : { :lat => o.send(lat_attr).to_f, :lng => o.send(lng_attr).to_f }
-      end
-    end
+    # def geoloc(lat_attr = nil, lng_attr = nil, &block)
+    #   #raise ArgumentError.new("Cannot specify additional attributes on a replica index") if @options[:replica]
+    #   add_attribute :_geoloc do |o|
+    #     block_given? ? o.instance_eval(&block) : { :lat => o.send(lat_attr).to_f, :lng => o.send(lng_attr).to_f }
+    #   end
+    # end
 
     # def tags(*args, &block)
     #   #raise ArgumentError.new("Cannot specify additional attributes on a replica index") if @options[:replica]
@@ -447,7 +447,7 @@ module AlgoliaSearch
 
     def algoliasearch(options = {}, &block)
       self.algoliasearch_settings = IndexSettings.new(options, &block)
-      self.algoliasearch_options = { :type => algolia_full_const_get(model_name.to_s), :per_page => algoliasearch_settings.get_setting(:hitsPerPage) || 10, :page => 1 }.merge(options)
+      self.algoliasearch_options = { :type => algolia_full_const_get(model_name.to_s)}.merge(options) #:per_page => algoliasearch_settings.get_setting(:hitsPerPage) || 10, :page => 1
       self.typesense_client||=AlgoliaSearch.client
       attr_accessor :highlight_result, :snippet_result
 
@@ -576,7 +576,8 @@ module AlgoliaSearch
           if algolia_conditional_index?(options)
             #delete non-indexable objects
             ids = group.select { |o| !algolia_indexable?(o, options) }.map { |o| algolia_object_id_of(o, options) }
-            self.typesense_client.collections[collectionObj[:alias_name]].documents.delete('filter_by': 'id:'+ids.select { |id| !id.blank? }.to_s)
+            self.delete_by_query(collectionObj[:alias_name],'id:'+ids.select { |id| !id.blank? }.to_s)
+            #self.typesense_client.collections[collectionObj[:alias_name]].documents.delete('filter_by': 'id:'+ids.select { |id| !id.blank? }.to_s)
             # index.delete_objects(ids.select { |id| !id.blank? })
             # select only indexable objects
             group = group.select { |o| algolia_indexable?(o, options) }
@@ -834,7 +835,7 @@ module AlgoliaSearch
       # total_hits = json["nbHits"].to_i < json["nbPages"].to_i * json["hitsPerPage"].to_i ?
       #   json["nbHits"].to_i : json["nbPages"].to_i * json["hitsPerPage"].to_i
       total_hits=json["found"]
-      res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json["page"].to_i + 1, :per_page => json["request_params"]["per_page"] }))
+      res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json["page"].to_i, :per_page => json["request_params"]["per_page"] }))
       res.extend(AdditionalMethods)
       res.send(:algolia_init_raw_answer, json)
       res

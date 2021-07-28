@@ -1,5 +1,5 @@
 unless defined? Kaminari
-  raise(AlgoliaSearch::BadConfiguration, "AlgoliaSearch: Please add 'kaminari' to your Gemfile to use kaminari pagination backend")
+  raise(Typesense::Error::MissingConfiguration, "Typesense: Please add 'kaminari' to your Gemfile to use kaminari pagination backend")
 end
 
 require "kaminari/models/array_extension"

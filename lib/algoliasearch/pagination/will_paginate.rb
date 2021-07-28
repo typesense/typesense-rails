@@ -1,7 +1,7 @@
 begin
   require 'will_paginate/collection'
 rescue LoadError
-  raise(AlgoliaSearch::BadConfiguration, "AlgoliaSearch: Please add 'will_paginate' to your Gemfile to use will_paginate pagination backend")
+  raise(Typesense::Error::MissingConfiguration, "Typesense: Please add 'will_paginate' to your Gemfile to use will_paginate pagination backend")
 end
 
 module AlgoliaSearch

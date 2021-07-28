@@ -294,15 +294,15 @@ class City < ActiveRecord::Base
 
   serialize :gl_array
 
-  def geoloc_array
-    lat.present? && lng.present? ? { :lat => lat, :lng => lng } : gl_array
+  def location
+    lat.present? && lng.present? ? [lat,lng] : gl_array
   end
 
   algoliasearch  :index_name => safe_index_name("City"), :per_environment => true do
-    geoloc do
-      geoloc_array
-    end
-    add_attribute :a_null_lat, :a_lng
+    # geoloc do
+    #   geoloc_array
+    # end
+    add_attribute :a_null_lat, :a_lng,:location
     # customRanking ['desc(b)']
 
     # add_replica safe_index_name('City_replica1'), :per_environment => true do
@@ -313,6 +313,7 @@ class City < ActiveRecord::Base
     # add_replica safe_index_name('City_replica2'), :per_environment => true do
     #   customRanking ['asc(a)', 'desc(c)']
     # end
+    predefined_fields [{'name'=> 'location','type'=> 'geopoint'}]
   end
 
   def a_null_lat
@@ -838,7 +839,7 @@ describe 'Colors' do
   #   facets = Color.search_for_facet_values('short_name', 'bl', :query => 'black')
   #   expect(facets.size).to eq(1)
   #   expect(facets.first['value']).to eq('bla')
-  #   expect(facets.first['highlighted']).to eq('<em>bl</em>a')
+  #   expect(facets.first['highlighted']).to eq('<mark>bl</mark>a')
   #   expect(facets.first['count']).to eq(1)
   # end
 end
@@ -1022,32 +1023,34 @@ describe 'An imaginary store' do
       expect(Product.search('*', "",{'per_page' => AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE}).size).to eq(n - 1)
     end
 
-    # it "should find using synonyms" do
-    #   expect(Product.search('pomme',"name").size).to eq(Product.search('apple',"name").size)
-    # end
+    it "should find using synonyms" do
+      puts Product.search('pomme',"name").size
+      puts Product.search('apple',"name").size
+      expect(Product.search('pomme',"name").size).to eq(Product.search('apple',"name").size)
+    end
   end
 
 end
 
-# describe 'Cities' do
-#   before(:all) do
-#     City.clear_index!()
-#   end
+describe 'Cities' do
+  before(:all) do
+    City.clear_index!()
+  end
 
-#   it "should index geo" do
-#     sf = City.create :name => 'San Francisco', :country => 'USA', :lat => 37.75, :lng => -122.68
-#     mv = City.create :name => 'Mountain View', :country => 'No man\'s land', :lat => 37.38, :lng => -122.08
-#     sf_and_mv = City.create :name => 'San Francisco & Mountain View', :country => 'Hybrid', :gl_array => [{ :lat => 37.75, :lng => -122.68 }, { :lat => 37.38, :lng => -122.08 }]
-#     results = City.search('', { :aroundLatLng => "37.33, -121.89", :aroundRadius => 50000 })
-#     expect(results.size).to eq(2)
-#     results.should include(mv, sf_and_mv)
+  it "should index geo" do
+    sf = City.create :name => 'San Francisco', :country => 'USA', :lat => 37.75, :lng => -122.68
+    mv = City.create :name => 'Mountain View', :country => 'No man\'s land', :lat => 37.38, :lng => -122.08
+    sf_and_mv = City.create :name => 'San Francisco & Mountain View', :country => 'Hybrid', :gl_array =>[37.75, -122.08]#[{ :lat => 37.75, :lng => -122.68 }, { :lat => 37.38, :lng => -122.08 }]
+    results = City.search('*',"", { 'filter_by' => "location:(37.33, -121.89,50 km)" })
+    expect(results.size).to eq(2)
+    results.should include(mv, sf_and_mv)
 
-#     results = City.search('', { :aroundLatLng => "37.33, -121.89", :aroundRadius => 500000 })
-#     expect(results.size).to eq(3)
-#     results.should include(mv)
-#     results.should include(sf)
-#     results.should include(sf_and_mv)
-#   end
+    results = City.search('*',"",{ 'filter_by' => "location:(37.33, -121.89, 500 km)"})
+    expect(results.size).to eq(3)
+    results.should include(mv)
+    results.should include(sf)
+    results.should include(sf_and_mv)
+  end
 
 #   it "should be searchable using replica index" do
 #     r = City.index(safe_index_name('City_replica1')).search 'no land'
@@ -1109,7 +1112,7 @@ end
 #     expect(City.index(safe_index_name('City_replica2')).get_settings['customRanking']).to eq(['asc(a)', 'desc(c)'])
 #   end
 
-# end
+ end
 
 # describe "FowardToReplicas" do
 #   before(:each) do
@@ -1216,206 +1219,215 @@ end
 #   end
 # end
 
-# describe 'MongoObject' do
-#   it "should not have method conflicts" do
-#     expect { MongoObject.reindex! }.to raise_error(NameError)
-#     expect { MongoObject.new.index! }.to raise_error(NameError)
-#     MongoObject.algolia_reindex!
-#     MongoObject.create(:name => 'mongo').algolia_index!
-#   end
-# end
+describe 'MongoObject' do
+  it "should not have method conflicts" do
+    expect { MongoObject.reindex! }.to raise_error(NameError)
+    expect { MongoObject.new.index! }.to raise_error(NameError)
+    MongoObject.algolia_reindex!
+    MongoObject.create(:name => 'mongo').algolia_index!
+  end
+end
 
-# describe 'Book' do
-#   before(:all) do
-#     Book.clear_index!()
-#     Book.index(safe_index_name('BookAuthor')).clear_objects
-#     Book.index(safe_index_name('Book')).clear_objects
-#   end
+describe 'Book' do
+  before(:all) do
+    Book.clear_index!()
+    # Book.index(safe_index_name('BookAuthor')).clear_objects
+    # Book.index(safe_index_name('Book')).clear_objects
+  end
 
-#   it "should index the book in 2 indexes of 3" do
-#     @steve_jobs = Book.create! :name => 'Steve Jobs', :author => 'Walter Isaacson', :premium => true, :released => true
-#     results = Book.search('steve')
-#     expect(results.size).to eq(1)
-#     results.should include(@steve_jobs)
+  # it "should index the book in 2 indexes of 3" do
+  #   @steve_jobs = Book.create! :name => 'Steve Jobs', :author => 'Walter Isaacson', :premium => true, :released => true
+  #   results = Book.search('steve')
+  #   expect(results.size).to eq(1)
+  #   results.should include(@steve_jobs)
 
-#     index_author = Book.index(safe_index_name('BookAuthor'))
-#     index_author.should_not be_nil
-#     results = index_author.search('steve')
-#     results['hits'].length.should eq(0)
-#     results = index_author.search('walter')
-#     results['hits'].length.should eq(1)
+  #   index_author = Book.index(safe_index_name('BookAuthor'))
+  #   index_author.should_not be_nil
+  #   results = index_author.search('steve')
+  #   results['hits'].length.should eq(0)
+  #   results = index_author.search('walter')
+  #   results['hits'].length.should eq(1)
 
-#     # premium -> not part of the public index
-#     index_book = Book.index(safe_index_name('Book'))
-#     index_book.should_not be_nil
-#     results = index_book.search('steve')
-#     results['hits'].length.should eq(0)
-#   end
+  #   premium -> not part of the public index
+  #   index_book = Book.index(safe_index_name('Book'))
+  #   index_book.should_not be_nil
+  #   results = index_book.search('steve')
+  #   results['hits'].length.should eq(0)
+  # end
 
-#   it "should sanitize attributes" do
-#     @hack = Book.create! :name => "\"><img src=x onerror=alert(1)> hack0r", :author => "<script type=\"text/javascript\">alert(1)</script>", :premium => true, :released => true
-#     b = Book.raw_search('hack')
-#     expect(b['hits'].length).to eq(1)
-#     begin
-#       expect(b['hits'][0]['name']).to eq('"> hack0r')
-#       expect(b['hits'][0]['author']).to eq('alert(1)')
-#       expect(b['hits'][0]['_highlightResult']['name']['value']).to eq('"> <em>hack</em>0r')
-#     rescue
-#       # rails 4.2's sanitizer
-#       begin
-#         expect(b['hits'][0]['name']).to eq('&quot;&gt; hack0r')
-#         expect(b['hits'][0]['author']).to eq('')
-#         expect(b['hits'][0]['_highlightResult']['name']['value']).to eq('&quot;&gt; <em>hack</em>0r')
-#       rescue
-#         # jruby
-#         expect(b['hits'][0]['name']).to eq('"&gt; hack0r')
-#         expect(b['hits'][0]['author']).to eq('')
-#         expect(b['hits'][0]['_highlightResult']['name']['value']).to eq('"&gt; <em>hack</em>0r')
-#       end
-#     end
-#   end
+  it "should sanitize attributes" do
+    @hack = Book.create! :name => "\"><img src=x onerror=alert(1)> hack0r", :author => "<script type=\"text/javascript\">alert(1)</script>", :premium => true, :released => true
+    b = Book.raw_search('hack',"name")
+    expect(b['hits'].length).to eq(1)
+    begin
+      expect(b['hits'][0]["document"]['name']).to eq('"> hack0r')
+      expect(b['hits'][0]["document"]['author']).to eq('alert(1)')
+      expect(b['hits'][0]['highlights'][0]['snippet']).to eq('"> <mark>hack0r</mark>')
+    rescue
+      # rails 4.2's sanitizer
+      begin
+        expect(b['hits'][0]["document"]['name']).to eq('&quot;&gt; hack0r')
+        expect(b['hits'][0]["document"]['author']).to eq('')
+        expect(b['hits'][0]["highlights"][0]['snippet']).to eq('&quot;&gt; <mark>hack0r</mark>')
+      rescue
+        # jruby
+        expect(b['hits'][0]["document"]['name']).to eq('"&gt; hack0r')
+        expect(b['hits'][0]["document"]['author']).to eq('')
+        expect(b['hits'][0]["highlights"][0]['snippet']).to eq('"&gt; <mark>hack0r</mark>')
+      end
+    end
+  end
 
-#   it "should handle removal in an extra index" do
-#     # add a new public book which (not premium but released)
-#     book = Book.create! :name => 'Public book', :author => 'me', :premium => false, :released => true
+  # it "should handle removal in an extra index" do
+  #   # add a new public book which (not premium but released)
+  #   book = Book.create! :name => 'Public book', :author => 'me', :premium => false, :released => true
 
-#     # should be searchable in the 'Book' index
-#     index = Book.index(safe_index_name('Book'))
-#     results = index.search('Public book')
-#     expect(results['hits'].size).to eq(1)
+  #   # should be searchable in the 'Book' index
+  #   index = Book.index(safe_index_name('Book'))
+  #   results = index.search('Public book')
+  #   expect(results['hits'].size).to eq(1)
 
-#     # update the book and make it non-public anymore (not premium, not released)
-#     if book.respond_to? :update_attributes
-#       book.update_attributes :released => false
-#     else
-#       book.update :released => false
-#     end
+  #   # update the book and make it non-public anymore (not premium, not released)
+  #   if book.respond_to? :update_attributes
+  #     book.update_attributes :released => false
+  #   else
+  #     book.update :released => false
+  #   end
 
-#     # should be removed from the index
-#     results = index.search('Public book')
-#     expect(results['hits'].size).to eq(0)
-#   end
+  #   # should be removed from the index
+  #   results = index.search('Public book')
+  #   expect(results['hits'].size).to eq(0)
+  # end
 
-#   it "should use the per_environment option in the additional index as well" do
-#     index = Book.index(safe_index_name('Book'))
-#     expect(index.name).to eq("#{safe_index_name('Book')}_#{Rails.env}")
-#   end
-# end
+  # it "should use the per_environment option in the additional index as well" do
+  #   index = Book.index(safe_index_name('Book'))
+  #   expect(index.name).to eq("#{safe_index_name('Book')}_#{Rails.env}")
+  # end
+end
 
-# describe 'Kaminari' do
-#   before(:all) do
-#     require 'kaminari'
-#     #AlgoliaSearch.configuration = { :application_id => ENV['ALGOLIA_APPLICATION_ID'], :api_key => ENV['ALGOLIA_API_KEY'], :pagination_backend => :kaminari }
-#     AlgoliaSearch.configuration = {
-#   nodes: [{
-#     host: "localhost",   # For Typesense Cloud use xxx.a1.typesense.net
-#     port: 8108,          # For Typesense Cloud use 443
-#     protocol: "http",         # For Typesense Cloud use https
-#   }],
-#   api_key: "xyz",
-#   connection_timeout_seconds: 2,}
-# end
+describe 'Kaminari' do
+  before(:all) do
+    require 'kaminari'
+    #AlgoliaSearch.configuration = { :application_id => ENV['ALGOLIA_APPLICATION_ID'], :api_key => ENV['ALGOLIA_API_KEY'], :pagination_backend => :kaminari }
+    AlgoliaSearch.configuration = {
+  nodes: [{
+    host: "localhost",   # For Typesense Cloud use xxx.a1.typesense.net
+    port: 8108,          # For Typesense Cloud use 443
+    protocol: "http",         # For Typesense Cloud use https
+  }],
+  api_key: "xyz",
+  connection_timeout_seconds: 2,
+  pagination_backend: :kaminari,
+}
+end
 
-#   it "should paginate" do
-#     pagination = City.search ''
-#     pagination.total_count.should eq(City.raw_search('')['found'])
+  it "should paginate" do
+    pagination = City.search('*',"")
 
-#     p1 = City.search '', :page => 1, 'per_page' => 1
-#     p1.size.should eq(1)
-#     p1[0].should eq(pagination[0])
-#     p1.total_count.should eq(City.raw_search('')['found'])
+    puts City.raw_search('*',"")['found']
 
-#     p2 = City.search '', :page => 2, 'per_page' => 1
-#     p2.size.should eq(1)
-#     p2[0].should eq(pagination[1])
-#     p2.total_count.should eq(City.raw_search('')['found'])
-#   end
-# end
+    pagination.total_count.should eq(City.raw_search('*',"")['found'])
 
-# describe 'Will_paginate' do
-#   before(:all) do
-#     require 'will_paginate'
-#     #AlgoliaSearch.configuration = { :application_id => ENV['ALGOLIA_APPLICATION_ID'], :api_key => ENV['ALGOLIA_API_KEY'], :pagination_backend => :will_paginate }
-#     AlgoliaSearch.configuration = {
-#   nodes: [{
-#     host: "localhost",   # For Typesense Cloud use xxx.a1.typesense.net
-#     port: 8108,          # For Typesense Cloud use 443
-#     protocol: "http",         # For Typesense Cloud use https
-#   }],
-#   api_key: "xyz",
-#   connection_timeout_seconds: 2,
-# }
+    p1 = City.search('*',"",{'page' => 1, 'per_page' => 1})
 
-#   end
+    p1.size.should eq(1)
+    p1[0].should eq(pagination[0])
+    p1.total_count.should eq(City.raw_search('*',"")['found'])
 
-#   it "should paginate" do
-#     p1 = City.search '', 'per_page' => 2
-#     p1.length.should eq(2)
-#     p1.per_page.should eq(2)
-#     p1.total_entries.should eq(City.raw_search('')['found'])
-#   end
-# end
+    p2 = City.search('*',"",{"page" => 2, 'per_page' => 1})
 
-# describe 'Disabled' do
-#   before(:all) do
-#     DisabledBoolean.index.clear_objects!
-#     DisabledProc.index.clear_objects!
-#     DisabledSymbol.index.clear_objects!
-#   end
+    p2.size.should eq(1)
+    p2[0].should eq(pagination[1])
+    p2.total_count.should eq(City.raw_search('*',"")['found'])
+  end
+end
 
-#   it "should disable the indexing using a boolean" do
-#     DisabledBoolean.create :name => 'foo'
-#     expect(DisabledBoolean.search('').size).to eq(0)
-#   end
+describe 'Will_paginate' do
+  before(:all) do
+    require 'will_paginate'
+    #AlgoliaSearch.configuration = { :application_id => ENV['ALGOLIA_APPLICATION_ID'], :api_key => ENV['ALGOLIA_API_KEY'], :pagination_backend => :will_paginate }
+    AlgoliaSearch.configuration = {
+  nodes: [{
+    host: "localhost",   # For Typesense Cloud use xxx.a1.typesense.net
+    port: 8108,          # For Typesense Cloud use 443
+    protocol: "http",         # For Typesense Cloud use https
+  }],
+  api_key: "xyz",
+  connection_timeout_seconds: 2,
+  pagination_backend: :will_paginate
+}
 
-#   it "should disable the indexing using a proc" do
-#     DisabledProc.create :name => 'foo'
-#     expect(DisabledProc.search('').size).to eq(0)
-#   end
+  end
 
-#   it "should disable the indexing using a symbol" do
-#     DisabledSymbol.create :name => 'foo'
-#     expect(DisabledSymbol.search('').size).to eq(0)
-#   end
-# end
+  it "should paginate" do
+    p1 = City.search('*',"",{'per_page' => 2})
 
-# describe 'NullableId' do
-#   before(:all) do
-#   end
+    p1.length.should eq(2)
+    p1.per_page.should eq(2)
+    p1.total_entries.should eq(City.raw_search('*',"")['found'])
+  end
+end
 
-#   it "should not delete a null objectID" do
-#     NullableId.create!
-#   end
-# end
+describe 'Disabled' do
+  before(:all) do
+    DisabledBoolean.clear_index!()
+    DisabledProc.clear_index!()
+    DisabledSymbol.clear_index!()
+  end
 
-# describe 'EnqueuedObject' do
-#   it "should enqueue a job" do
-#     expect {
-#       EnqueuedObject.create! :name => 'test'
-#     }.to raise_error("enqueued 1")
-#   end
+  it "should disable the indexing using a boolean" do
+    DisabledBoolean.create :name => 'foo'
+    expect(DisabledBoolean.search('*',"").size).to eq(0)
+  end
 
-#   it "should not enqueue a job inside no index block" do
-#     expect {
-#       EnqueuedObject.without_auto_index do
-#         EnqueuedObject.create! :name => 'test'
-#       end
-#     }.not_to raise_error
-#   end
-# end
+  it "should disable the indexing using a proc" do
+    DisabledProc.create :name => 'foo'
+    expect(DisabledProc.search('*',"").size).to eq(0)
+  end
 
-# describe 'DisabledEnqueuedObject' do
-#   it "should not try to enqueue a job" do
-#     expect {
-#       DisabledEnqueuedObject.create! :name => 'test'
-#     }.not_to raise_error
-#   end
-# end
+  it "should disable the indexing using a symbol" do
+    DisabledSymbol.create :name => 'foo'
+    expect(DisabledSymbol.search('*',"").size).to eq(0)
+  end
+end
 
-# describe 'Misconfigured Block' do
-#   it "should force the algoliasearch block" do
-#     expect {
-#       MisconfiguredBlock.reindex
-#     }.to raise_error(ArgumentError)
-#   end
-# end
+describe 'NullableId' do
+  before(:all) do
+  end
+
+  it "should not delete a null objectID" do
+    NullableId.create!
+  end
+end
+
+describe 'EnqueuedObject' do
+  it "should enqueue a job" do
+    expect {
+      EnqueuedObject.create! :name => 'test'
+    }.to raise_error("enqueued 1")
+  end
+
+  it "should not enqueue a job inside no index block" do
+    expect {
+      EnqueuedObject.without_auto_index do
+        EnqueuedObject.create! :name => 'test'
+      end
+    }.not_to raise_error
+  end
+end
+
+describe 'DisabledEnqueuedObject' do
+  it "should not try to enqueue a job" do
+    expect {
+      DisabledEnqueuedObject.create! :name => 'test'
+    }.not_to raise_error
+  end
+end
+
+describe 'Misconfigured Block' do
+  it "should force the algoliasearch block" do
+    expect {
+      MisconfiguredBlock.reindex
+    }.to raise_error(ArgumentError)
+  end
+end
