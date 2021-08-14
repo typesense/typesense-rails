@@ -390,6 +390,10 @@ module AlgoliaSearch
       base.cattr_accessor :algoliasearch_options, :algoliasearch_settings,:typesense_client
     end
 
+    def collection_name(name)
+        name+Time.now.to_i.to_s
+    end
+
     def typesense_create_collection(collection_name,fields=nil,default_sorting_field=nil)
           self.typesense_client.collections.create(
           {"name" => collection_name}
@@ -635,7 +639,7 @@ module AlgoliaSearch
         # master_settings.delete "replicas"
 
         # init temporary index
-        src_index_name = master_index[:collection_name]
+        src_index_name = self.collection_name(master_index[:collection_name])
         #tmp_index_name = "#{src_index_name}.tmp"
         tmp_options = options.merge({ :index_name => src_index_name })
          tmp_options.delete(:per_environment) # already included in the temporary index_name
@@ -934,9 +938,10 @@ module AlgoliaSearch
       if self.get_collection(alias_name)
         #collection_name=self.get_alias(alias_name)["collection_name"]
       else
+        new_collection_name=self.collection_name(collection_name)
         raise ArgumentError.new("#{collection_name} is not found in your model.") if not create
-        self.create_collection(collection_name,settings.get_setting(:predefined_fields),settings.get_setting(:default_sorting_field))
-        self.upsert_alias(collection_name,alias_name)
+        self.create_collection(new_collection_name,settings.get_setting(:predefined_fields),settings.get_setting(:default_sorting_field))
+        self.upsert_alias(new_collection_name,alias_name)
       end
       @algolia_indexes[settings] = {collection_name: collection_name,alias_name: alias_name}#SafeIndex.new(algolia_index_name(options))#, algoliasearch_options[:raise_on_failure])
 
