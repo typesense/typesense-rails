@@ -49,37 +49,7 @@ module AlgoliaSearch
 
     # AlgoliaSearch settings
     OPTIONS = [
-          # # Attributes
-           # :searchableAttributes, :attributesForFaceting, :unretrievableAttributes, :attributesToRetrieve,
-           # # Ranking
-           # :ranking, :customRanking, # Replicas are handled via `add_replica`
-           # # Faceting
-           # :maxValuesPerFacet, :sortFacetValuesBy,
-           # # Highlighting / Snippeting
-           # :attributesToHighlight, :attributesToSnippet, :highlightPreTag, :highlightPostTag,
-           # :snippetEllipsisText, :restrictHighlightAndSnippetArrays,
-           # # Pagination
-           # :hitsPerPage, :paginationLimitedTo,
-           # # Typo
-           # :minWordSizefor1Typo, :minWordSizefor2Typos, :typoTolerance, :allowTyposOnNumericTokens,
-           # :disableTypoToleranceOnAttributes, :disableTypoToleranceOnWords, :separatorsToIndex,
-           # # Language
-           # :ignorePlurals, :removeStopWords, :camelCaseAttributes, :decompoundedAttributes,
-           # :keepDiacriticsOnCharacters, :queryLanguages, :indexLanguages,
-           # # Query Rules
-           # :enableRules,
-           # # Query Strategy
-           # :queryType, :removeWordsIfNoResults, :advancedSyntax, :optionalWords,
-           # :disablePrefixOnAttributes, :disableExactOnAttributes, :exactOnSingleWordQuery, :alternativesAsExact,
-           # # Performance
-           # :numericAttributesForFiltering, :allowCompressionOfIntegerArray,
-           # # Advanced
-           # :attributeForDistinct, :distinct, :replaceSynonymsInHighlight, :minProximity, :responseFields,
-           # :maxFacetHits,
-
-     # # Rails-specific
-            :synonyms, :placeholders, :altCorrections,
-            :predefined_fields,:default_sorting_field
+            :mutli_way_synonyms,:one_way_synonyms,:predefined_fields,:default_sorting_field
       ]
     OPTIONS.each do |k|
       define_method k do |v|
@@ -394,7 +364,11 @@ module AlgoliaSearch
         name+Time.now.to_i.to_s
     end
 
-    def typesense_create_collection(collection_name,fields=nil,default_sorting_field=nil)
+    def typesense_create_collection(collection_name,settings=nil)
+      fields = settings.get_settings(:predefined_fields)
+      default_sorting_field=settings.get_settings(:default_sorting_field)
+      multi_way_synonyms = settings.get_settings(:multi_way_synonyms)
+      one_way_synonyms = settings.get_settings(:one_way_synonyms)
           self.typesense_client.collections.create(
           {"name" => collection_name}
             .merge(
@@ -402,6 +376,15 @@ module AlgoliaSearch
               default_sorting_field ? {"default_sorting_field" => default_sorting_field} : {} )
         )
       puts "\n\nCollection '#{collection_name}' created!\n\n"
+
+      if multi_way_synonyms
+        self.typesense_multi_way_synonyms(collection_name,multi_way_synonyms)
+      end
+
+      if one_way_synonyms
+        self.typesense_one_way_synonyms(collection_name,one_way_synonyms)
+      end
+
     end
 
     def typesense_upsert_alias(collection_name,alias_name)
@@ -461,6 +444,26 @@ module AlgoliaSearch
 
     def typesense_search_collection(search_parameters,collection)
       self.typesense_client.collections[collection].documents.search(search_parameters)
+    end
+
+
+
+    def typesense_multi_way_synonyms(collection,synonyms)
+      synonyms.each do |synonym_name|
+        self.typesense_client.collections[collection].synonyms.upsert(
+          synonym_name,
+          {"synonyms"=> synonyms[synonym_name]}
+        )
+      end
+    end
+
+    def typesense_one_way_synonyms(collection,synonyms)
+      synonyms.each do |synonym_name|
+      self.typesense_client.collections[collection].synonyms.upsert(
+        synonym_name,
+        synonyms[synonym_name]
+      )
+      end
     end
 
     def algoliasearch(options = {}, &block)
@@ -648,7 +651,7 @@ module AlgoliaSearch
         # if options[:check_settings] == false
           #@client.copy_index!(src_index_name, tmp_index_name, %w(settings synonyms rules))
           #tmp_index = SafeIndex.new(tmp_index_name)#, !!options[:raise_on_failure])
-          self.create_collection(src_index_name,settings.get_setting(:predefined_fields),settings.get_setting(:default_sorting_field))
+          self.create_collection(src_index_name,settings)
         # else
         #   tmp_index = algolia_ensure_init(tmp_options, tmp_settings, master_settings)
         # end
@@ -940,7 +943,7 @@ module AlgoliaSearch
       else
         new_collection_name=self.collection_name(collection_name)
         raise ArgumentError.new("#{collection_name} is not found in your model.") if not create
-        self.create_collection(new_collection_name,settings.get_setting(:predefined_fields),settings.get_setting(:default_sorting_field))
+        self.create_collection(new_collection_name,settings)
         self.upsert_alias(new_collection_name,alias_name)
       end
       @algolia_indexes[settings] = {collection_name: collection_name,alias_name: alias_name}#SafeIndex.new(algolia_index_name(options))#, algoliasearch_options[:raise_on_failure])
