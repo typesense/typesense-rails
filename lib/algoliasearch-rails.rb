@@ -49,7 +49,7 @@ module AlgoliaSearch
 
     # AlgoliaSearch settings
     OPTIONS = [
-            :mutli_way_synonyms,:one_way_synonyms,:predefined_fields,:default_sorting_field
+            :multi_way_synonyms,:one_way_synonyms,:predefined_fields,:default_sorting_field
       ]
     OPTIONS.each do |k|
       define_method k do |v|
@@ -335,14 +335,10 @@ module AlgoliaSearch
         alias_method :clear_index!, :algolia_clear_index! unless method_defined? :clear_index!
         alias_method :search, :algolia_search unless method_defined? :search
         alias_method :raw_search, :algolia_raw_search unless method_defined? :raw_search
-        # alias_method :search_facet, :algolia_search_facet unless method_defined? :search_facet
-        # alias_method :search_for_facet_values, :algolia_search_for_facet_values unless method_defined? :search_for_facet_values
         alias_method :index, :algolia_index unless method_defined? :index
         alias_method :index_name, :algolia_index_name unless method_defined? :index_name
         alias_method :must_reindex?, :algolia_must_reindex? unless method_defined? :must_reindex?
-
         alias_method :create_collection, :typesense_create_collection unless method_defined? :create_collection
-        alias_method :delete_collection, :typesense_delete_collection unless method_defined? :delete_collection
         alias_method :upsert_alias, :typesense_upsert_alias unless method_defined? :upsert_alias
         alias_method :get_collection, :typesense_get_collection unless method_defined? :get_collection
         alias_method :num_documents, :typesense_num_documents unless method_defined? :num_documents
@@ -360,15 +356,16 @@ module AlgoliaSearch
       base.cattr_accessor :algoliasearch_options, :algoliasearch_settings,:typesense_client
     end
 
-    def collection_name(name)
-        name+Time.now.to_i.to_s
+
+    def collection_name(options)
+        algolia_index_name(options)+"_"+Time.now.to_i.to_s
     end
 
     def typesense_create_collection(collection_name,settings=nil)
-      fields = settings.get_settings(:predefined_fields)
-      default_sorting_field=settings.get_settings(:default_sorting_field)
-      multi_way_synonyms = settings.get_settings(:multi_way_synonyms)
-      one_way_synonyms = settings.get_settings(:one_way_synonyms)
+      fields = settings.get_setting(:predefined_fields)
+      default_sorting_field=settings.get_setting(:default_sorting_field)
+      multi_way_synonyms = settings.get_setting(:multi_way_synonyms)
+      one_way_synonyms = settings.get_setting(:one_way_synonyms)
           self.typesense_client.collections.create(
           {"name" => collection_name}
             .merge(
@@ -449,21 +446,25 @@ module AlgoliaSearch
 
 
     def typesense_multi_way_synonyms(collection,synonyms)
-      synonyms.each do |synonym_name|
+      synonyms.each do |synonym_hash|
+      synonym_hash.each do |synonym_name,synonym|
         self.typesense_client.collections[collection].synonyms.upsert(
           synonym_name,
-          {"synonyms"=> synonyms[synonym_name]}
+          {"synonyms"=> synonym}
         )
       end
     end
+    end
 
     def typesense_one_way_synonyms(collection,synonyms)
-      synonyms.each do |synonym_name|
+      synonyms.each do |synonym_hash|
+      synonym_hash.each do |synonym_name,synonym|
       self.typesense_client.collections[collection].synonyms.upsert(
         synonym_name,
-        synonyms[synonym_name]
+        synonym
       )
       end
+    end
     end
 
     def algoliasearch(options = {}, &block)
@@ -632,8 +633,15 @@ module AlgoliaSearch
         # next if options[:replica]
 
         # fetch the master settings
-        master_index = algolia_ensure_init(options,settings)
-        self.delete_collection(master_index[:alias_name])
+
+        begin
+          master_index = algolia_ensure_init(options,settings,false)
+          self.delete_collection(master_index[:alias_name])
+        rescue ArgumentError
+          @algolia_indexes[settings] = {collection_name: "",alias_name: algolia_index_name(options)}
+          master_index=@algolia_indexes[settings]
+        end
+
         #master_settings = master_index.get_settings rescue {} # if master doesn't exist yet
         #master_settings.merge!(JSON.parse(settings.to_settings.to_json)) # convert symbols to strings
 
@@ -642,7 +650,7 @@ module AlgoliaSearch
         # master_settings.delete "replicas"
 
         # init temporary index
-        src_index_name = self.collection_name(master_index[:collection_name])
+        src_index_name = self.collection_name(options)
         #tmp_index_name = "#{src_index_name}.tmp"
         tmp_options = options.merge({ :index_name => src_index_name })
          tmp_options.delete(:per_environment) # already included in the temporary index_name
@@ -755,7 +763,7 @@ module AlgoliaSearch
       raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
-        collectionObj = algolia_ensure_init(options,  settings,create: false)
+        collectionObj = algolia_ensure_init(options,  settings,false)
         #next if options[:replica]
         # if synchronous || options[:synchronous]
         #   index.delete_object!(object_id)
@@ -776,7 +784,7 @@ module AlgoliaSearch
       puts "\n\ntypesense_clear_index!: Delete collection of given model."
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
-        collectionObj = algolia_ensure_init(options,settings,create: false)
+        collectionObj = algolia_ensure_init(options,settings,false)
         #next if options[:replica]
         #synchronous || options[:synchronous] ? index.clear_objects! : index.clear_objects
         self.delete_collection(collectionObj[:alias_name])
@@ -924,7 +932,7 @@ module AlgoliaSearch
 
     protected
 
-    def algolia_ensure_init(options=nil, settings=nil, index_settings=nil,create=true)
+    def algolia_ensure_init(options=nil, settings=nil,create=true)
 
       raise ArgumentError.new("No `algoliasearch` block found in your model.") if algoliasearch_settings.nil?
 
@@ -935,16 +943,16 @@ module AlgoliaSearch
 
       return @algolia_indexes[settings] if @algolia_indexes[settings] and  self.get_collection(@algolia_indexes[settings][:alias_name])
 
-      collection_name=algolia_index_name(options)
-      alias_name=collection_name+"_alias"
+      alias_name=algolia_index_name(options)
+      collection=self.get_collection(alias_name)
 
-      if self.get_collection(alias_name)
-        #collection_name=self.get_alias(alias_name)["collection_name"]
+      if collection
+              collection_name=collection["name"]
       else
-        new_collection_name=self.collection_name(collection_name)
-        raise ArgumentError.new("#{collection_name} is not found in your model.") if not create
-        self.create_collection(new_collection_name,settings)
-        self.upsert_alias(new_collection_name,alias_name)
+        collection_name=self.collection_name(options)
+        raise ArgumentError.new("#{collection_name} is not found in your model.") unless create
+        self.create_collection(collection_name,settings)
+        self.upsert_alias(collection_name,alias_name)
       end
       @algolia_indexes[settings] = {collection_name: collection_name,alias_name: alias_name}#SafeIndex.new(algolia_index_name(options))#, algoliasearch_options[:raise_on_failure])
 
