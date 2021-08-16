@@ -30,6 +30,7 @@ group :development do
   gem 'travis'
   gem 'rake', '~> 10.1.0'
   gem 'rdoc'
+  gem "rubocop", "~> 1.19"
 end
 
 group :test, :development do

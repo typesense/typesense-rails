@@ -1,4 +1,4 @@
-require "typesense"
+require 'typesense'
 
 module AlgoliaSearch
   module Configuration
@@ -7,13 +7,12 @@ module AlgoliaSearch
     end
 
     def configuration
-      @@configuration || raise(NotConfigured, "Please configure AlgoliaSearch. Set AlgoliaSearch.configuration = {application_id: 'YOUR_APPLICATION_ID', api_key: 'YOUR_API_KEY'}")
+      @@configuration || raise(NotConfigured,
+                               "Please configure AlgoliaSearch. Set AlgoliaSearch.configuration = {application_id: 'YOUR_APPLICATION_ID', api_key: 'YOUR_API_KEY'}")
     end
 
     def configuration=(configuration)
-      if configuration.key?(:pagination_backend)
-        @pagination_backend = configuration.delete(:pagination_backend)
-      end
+      @pagination_backend = configuration.delete(:pagination_backend) if configuration.key?(:pagination_backend)
       @@configuration = configuration
     end
 
@@ -22,15 +21,12 @@ module AlgoliaSearch
     end
 
     def client
-      if @client.nil?
-        setup_client
-      end
+      setup_client if @client.nil?
 
       @client
     end
 
     def setup_client
-      #@client = Algolia::Search::Client.create_with_config(Algolia::Search::Config.new(@@configuration))
       @client = Typesense::Client.new(@@configuration)
     end
   end

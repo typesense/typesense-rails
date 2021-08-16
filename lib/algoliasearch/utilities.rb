@@ -45,4 +45,3 @@ module AlgoliaSearch
     end
   end
 end
-

@@ -1,30 +1,33 @@
-require "algolia"
-require "typesense"
-require "algoliasearch/version"
-require "algoliasearch/utilities"
+require 'algolia'
+require 'typesense'
+require 'algoliasearch/version'
+require 'algoliasearch/utilities'
 
 if defined? Rails
   begin
-    require "algoliasearch/railtie"
+    require 'algoliasearch/railtie'
   rescue LoadError
   end
 end
 
 begin
-  require "active_job"
+  require 'active_job'
 rescue LoadError
   # no queue support, fine
 end
 
-require "logger"
+require 'logger'
 
 module AlgoliaSearch
   class NotConfigured < StandardError; end
+
   class BadConfiguration < StandardError; end
+
   class NoBlockGiven < StandardError; end
+
   class MixedSlavesAndReplicas < StandardError; end
 
-  autoload :Configuration, "algoliasearch/configuration"
+  autoload :Configuration, 'algoliasearch/configuration'
   extend Configuration
 
   autoload :Pagination, 'algoliasearch/pagination'
@@ -45,12 +48,12 @@ module AlgoliaSearch
   end
 
   class IndexSettings
-    DEFAULT_BATCH_SIZE =250
+    DEFAULT_BATCH_SIZE = 250
 
     # AlgoliaSearch settings
-    OPTIONS = [
-            :multi_way_synonyms,:one_way_synonyms,:predefined_fields,:default_sorting_field
-      ]
+    OPTIONS = %i[
+      multi_way_synonyms one_way_synonyms predefined_fields default_sorting_field
+    ]
     OPTIONS.each do |k|
       define_method k do |v|
         instance_variable_set("@#{k}", v)
@@ -68,44 +71,50 @@ module AlgoliaSearch
     end
 
     def attribute(*names, &block)
-      raise ArgumentError.new("Cannot pass multiple attribute names if block given") if block_given? and names.length > 1
-      #raise ArgumentError.new("Cannot specify additional attributes on a replica index") if @options[:replica]
+      raise ArgumentError, 'Cannot pass multiple attribute names if block given' if block_given? && (names.length > 1)
+
       @attributes ||= {}
       names.flatten.each do |name|
-        @attributes[name.to_s] = block_given? ? Proc.new { |o| o.instance_eval(&block) } : Proc.new { |o| o.send(name) }
+        @attributes[name.to_s] = block_given? ? proc { |o| o.instance_eval(&block) } : proc { |o| o.send(name) }
       end
     end
 
-    alias :attributes :attribute
+    alias attributes attribute
 
     def add_attribute(*names, &block)
-      raise ArgumentError.new("Cannot pass multiple attribute names if block given") if block_given? and names.length > 1
-      #raise ArgumentError.new("Cannot specify additional attributes on a replica index") if @options[:replica]
+      raise ArgumentError, 'Cannot pass multiple attribute names if block given' if block_given? && (names.length > 1)
+
       @additional_attributes ||= {}
       names.each do |name|
-        @additional_attributes[name.to_s] = block_given? ? Proc.new { |o| o.instance_eval(&block) } : Proc.new { |o| o.send(name) }
+        @additional_attributes[name.to_s] = if block_given?
+                                              proc { |o| o.instance_eval(&block) }
+                                            else
+                                              proc { |o|
+                                                o.send(name)
+                                              }
+                                            end
       end
     end
 
-    alias :add_attributes :add_attribute
+    alias add_attributes add_attribute
 
-    def is_mongoid?(object)
+    def mongoid?(object)
       defined?(::Mongoid::Document) && object.class.include?(::Mongoid::Document)
     end
 
-    def is_sequel?(object)
+    def sequel?(object)
       defined?(::Sequel) && object.class < ::Sequel::Model
     end
 
-    def is_active_record?(object)
-      !is_mongoid?(object) && !is_sequel?(object)
+    def active_record?(object)
+      !mongoid?(object) && !sequel?(object)
     end
 
     def get_default_attributes(object)
-      if is_mongoid?(object)
+      if mongoid?(object)
         # work-around mongoid 2.4's unscoped method, not accepting a block
         object.attributes
-      elsif is_sequel?(object)
+      elsif sequel?(object)
         object.to_hash
       else
         object.class.unscoped do
@@ -129,33 +138,29 @@ module AlgoliaSearch
     def get_attributes(object)
       # If a serializer is set, we ignore attributes
       # everything should be done via the serializer
-      if not @serializer.nil?
+      if !@serializer.nil?
         attributes = @serializer.new(object).attributes
-      else
-        if @attributes.nil? || @attributes.length == 0
-          # no `attribute ...` have been configured, use the default attributes of the model
-          attributes = get_default_attributes(object)
-        else
-          # at least 1 `attribute ...` has been configured, therefore use ONLY the one configured
-          if is_active_record?(object)
-            object.class.unscoped do
-              attributes = attributes_to_hash(@attributes, object)
-            end
-          else
-            attributes = attributes_to_hash(@attributes, object)
-          end
+      elsif @attributes.nil? || @attributes.length.zero?
+        attributes = get_default_attributes(object)
+      # no `attribute ...` have been configured, use the default attributes of the model
+      elsif active_record?(object)
+        # at least 1 `attribute ...` has been configured, therefore use ONLY the one configured
+        object.class.unscoped do
+          attributes = attributes_to_hash(@attributes, object)
         end
+      else
+        attributes = attributes_to_hash(@attributes, object)
       end
 
       attributes.merge!(attributes_to_hash(@additional_attributes, object)) if @additional_attributes
 
       if @options[:sanitize]
         sanitizer = begin
-            ::HTML::FullSanitizer.new
-          rescue NameError
-            # from rails 4.2
-            ::Rails::Html::FullSanitizer.new
-          end
+          ::HTML::FullSanitizer.new
+        rescue NameError
+          # from rails 4.2
+          ::Rails::Html::FullSanitizer.new
+        end
         attributes = sanitize_attributes(attributes, sanitizer)
       end
 
@@ -182,7 +187,7 @@ module AlgoliaSearch
     def encode_attributes(v)
       case v
       when String
-        v.force_encoding("utf-8")
+        v.force_encoding('utf-8')
       when Hash
         v.each { |key, value| v[key] = encode_attributes(value) }
       when Array
@@ -192,135 +197,18 @@ module AlgoliaSearch
       end
     end
 
-    # def geoloc(lat_attr = nil, lng_attr = nil, &block)
-    #   #raise ArgumentError.new("Cannot specify additional attributes on a replica index") if @options[:replica]
-    #   add_attribute :_geoloc do |o|
-    #     block_given? ? o.instance_eval(&block) : { :lat => o.send(lat_attr).to_f, :lng => o.send(lng_attr).to_f }
-    #   end
-    # end
-
-    # def tags(*args, &block)
-    #   #raise ArgumentError.new("Cannot specify additional attributes on a replica index") if @options[:replica]
-    #   add_attribute :_tags do |o|
-    #     v = block_given? ? o.instance_eval(&block) : args
-    #     v.is_a?(Array) ? v : [v]
-    #   end
-    # end
-
     def get_setting(name)
       instance_variable_get("@#{name}")
     end
-
-    # def to_settings
-    #   settings = {}
-    #   OPTIONS.each do |k|
-    #     v = get_setting(k)
-    #     settings[k] = v if !v.nil?
-    #   end
-    #   if !@options[:replica]
-    #     settings[:replicas] = additional_indexes.select { |opts, s| opts[:replica] }.map do |opts, s|
-    #       name = opts[:index_name]
-    #       name = "#{name}_#{Rails.env.to_s}" if opts[:per_environment]
-    #       name
-    #     end
-    #     settings.delete(:replicas) if settings[:replicas].empty?
-    #   end
-    #   settings
-    # end
-
-    # def add_index(index_name, options = {}, &block)
-    #   raise ArgumentError.new("Cannot specify additional index on a replica index") if @options[:replica]
-    #   raise ArgumentError.new("No block given") if !block_given?
-    #   raise ArgumentError.new("Options auto_index and auto_remove cannot be set on nested indexes") if options[:auto_index] || options[:auto_remove]
-    #   @additional_indexes ||= {}
-    #   options[:index_name] = index_name
-    #   @additional_indexes[options] = IndexSettings.new(options, &block)
-    # end
-
-    # def add_replica(index_name, options = {}, &block)
-    #   raise ArgumentError.new("Cannot specify additional replicas on a replica index") if @options[:replica]
-    #   raise ArgumentError.new("No block given") if !block_given?
-    #   add_index(index_name, options.merge({ :replica => true, :primary_settings => self }), &block)
-    # end
-
-    # def additional_indexes
-    #   @additional_indexes || {}
-    # end
   end
 
-  #Default queueing system
+  # Default queueing system
   if defined?(::ActiveJob::Base)
-    #lazy load the ActiveJob class to ensure the
-    #queue is initialized before using it
-    #see https://github.com/algolia/algoliasearch-rails/issues/69
-    autoload :AlgoliaJob, "algoliasearch/algolia_job"
+    # lazy load the ActiveJob class to ensure the
+    # queue is initialized before using it
+    # see https://github.com/algolia/algoliasearch-rails/issues/69
+    autoload :AlgoliaJob, 'algoliasearch/algolia_job'
   end
-
-  #this class wraps an Algolia::Index object ensuring all raised exceptions
-  #are correctly logged or thrown depending on the `raise_on_failure` option
-  #class SafeIndex
-
-    # def initialize(name)#, raise_on_failure)
-
-    #   @index = AlgoliaSearch.client.init_index(name)
-    #   @raise_on_failure = raise_on_failure.nil? || raise_on_failure
-    # end
-
-    # ::Algolia::Search::Index.instance_methods(false).each do |m|
-    #   define_method(m) do |*args, &block|
-    #     SafeIndex.log_or_throw(m, @raise_on_failure) do
-    #       @index.send(m, *args, &block)
-    #     end
-    #   end
-    # end
-
-    # # special handling of wait_task to handle null task_id
-    # def wait_task(task_id)
-    #   return if task_id.nil? && !@raise_on_failure # ok
-    #   SafeIndex.log_or_throw(:wait_task, @raise_on_failure) do
-    #     @index.wait_task(task_id)
-    #   end
-    # end
-
-    # # special handling of get_settings to avoid raising errors on 404
-    #  def get_settings(*args)
-    #    SafeIndex.log_or_throw(:get_settings, @raise_on_failure) do
-    #      begin
-    #        @index.get_settings(*args)
-    #      rescue Algolia::AlgoliaHttpError => e
-    #        return {} if e.code == 404 # not fatal
-    #        raise e
-    #      end
-    #    end
-    #  end
-
-    # # expose move as well
-    # def self.move_index(old_name, new_name)
-    #   SafeIndex.log_or_throw(:move_index, true) do
-    #     AlgoliaSearch.client.move_index(old_name, new_name)
-    #   end
-    # end
-
-    # private
-    # def self.log_or_throw(method, raise_on_failure, &block)
-    #   begin
-    #     yield
-    # rescue Algolia::AlgoliaError => e
-    #     raise e if raise_on_failure
-    #     # log the error
-    #     (Rails.logger || Logger.new(STDOUT)).error("[algoliasearch-rails] #{e.message}")
-    #     # return something
-    #     case method.to_s
-    #     when 'search'
-    #       # some attributes are required
-    #       { 'hits' => [], 'hitsPerPage' => 0, 'page' => 0, 'facets' => {}, 'error' => e }
-    #     else
-    #       # empty answer
-    #       { 'error' => e }
-    #     end
-    #   end
-    # end
-  #end
 
   # these are the class methods added when AlgoliaSearch is included
   module ClassMethods
@@ -343,164 +231,145 @@ module AlgoliaSearch
         alias_method :get_collection, :typesense_get_collection unless method_defined? :get_collection
         alias_method :num_documents, :typesense_num_documents unless method_defined? :num_documents
         alias_method :get_alias, :typesense_get_alias unless method_defined? :get_alias
-        alias_method :upsert_document,:typesense_upsert_document unless method_defined? :upsert_document
+        alias_method :upsert_document, :typesense_upsert_document unless method_defined? :upsert_document
         alias_method :import_documents, :typesense_import_documents unless method_defined? :import_documents
         alias_method :retrieve_document, :typesense_retrieve_document unless method_defined? :retrieve_document
         alias_method :delete_document, :typesense_delete_document unless method_defined? :delete_document
         alias_method :delete_collection, :typesense_delete_collection unless method_defined? :delete_collection
         alias_method :delete_by_query, :typesense_delete_by_query unless method_defined? :delete_by_query
         alias_method :search_collection, :typesense_search_collection unless method_defined? :search_collection
-
       end
 
-      base.cattr_accessor :algoliasearch_options, :algoliasearch_settings,:typesense_client
+      base.cattr_accessor :algoliasearch_options, :algoliasearch_settings, :typesense_client
     end
-
 
     def collection_name(options)
-        algolia_index_name(options)+"_"+Time.now.to_i.to_s
+      "#{algolia_index_name(options)}_#{Time.now.to_i}"
     end
 
-    def typesense_create_collection(collection_name,settings=nil)
+    def typesense_create_collection(collection_name, settings = nil)
       fields = settings.get_setting(:predefined_fields)
-      default_sorting_field=settings.get_setting(:default_sorting_field)
+      default_sorting_field = settings.get_setting(:default_sorting_field)
       multi_way_synonyms = settings.get_setting(:multi_way_synonyms)
       one_way_synonyms = settings.get_setting(:one_way_synonyms)
-          self.typesense_client.collections.create(
-          {"name" => collection_name}
-            .merge(
-              fields ? {"fields" => fields.push({"name" =>"id","type" => "string"})} : {"fields" =>[{"name" =>"id","type" => "string"},{ "name" => ".*", "type" => "auto" }]},
-              default_sorting_field ? {"default_sorting_field" => default_sorting_field} : {} )
-        )
+      typesense_client.collections.create(
+        { 'name' => collection_name }
+          .merge(
+            if fields
+              { 'fields' => fields.push({ 'name' => 'id',
+                                          'type' => 'string' }) }
+            else
+              { 'fields' => [{ 'name' => 'id', 'type' => 'string' },
+                             { 'name' => '.*',
+                               'type' => 'auto' }] }
+            end,
+            default_sorting_field ? { 'default_sorting_field' => default_sorting_field } : {}
+          )
+      )
       puts "\n\nCollection '#{collection_name}' created!\n\n"
 
-      if multi_way_synonyms
-        self.typesense_multi_way_synonyms(collection_name,multi_way_synonyms)
-      end
+      typesense_multi_way_synonyms(collection_name, multi_way_synonyms) if multi_way_synonyms
 
-      if one_way_synonyms
-        self.typesense_one_way_synonyms(collection_name,one_way_synonyms)
-      end
-
+      typesense_one_way_synonyms(collection_name, one_way_synonyms) if one_way_synonyms
     end
 
-    def typesense_upsert_alias(collection_name,alias_name)
-      self.typesense_client.aliases.upsert(alias_name,{'collection_name' => collection_name})
+    def typesense_upsert_alias(collection_name, alias_name)
+      typesense_client.aliases.upsert(alias_name, { 'collection_name' => collection_name })
     end
 
     def typesense_get_collection(collection)
-      begin
-       return self.typesense_client.collections[collection].retrieve
-      rescue Typesense::Error::ObjectNotFound => e
-        return nil
-      end
+      typesense_client.collections[collection].retrieve
+    rescue Typesense::Error::ObjectNotFound
+      nil
     end
 
     def typesense_num_documents(collection)
-      self.typesense_client.collections[collection].retrieve["num_documents"]
+      typesense_client.collections[collection].retrieve['num_documents']
     end
 
     def typesense_get_alias(alias_name)
-       self.typesense_client.aliases[alias_name].retrieve
+      typesense_client.aliases[alias_name].retrieve
     end
 
-    def typesense_upsert_document(object,collection,dirtyvalues=nil)
-      raise ArgumentError.new("Object is required") unless object
-      if dirtyvalues
-        self.typesense_client.collections[collection].documents.upsert(object, dirty_values: dirtyvalues)
-      end
-      self.typesense_client.collections[collection].documents.upsert(object)
+    def typesense_upsert_document(object, collection, dirtyvalues = nil)
+      raise ArgumentError, 'Object is required' unless object
+
+      typesense_client.collections[collection].documents.upsert(object, dirty_values: dirtyvalues) if dirtyvalues
+      typesense_client.collections[collection].documents.upsert(object)
     end
 
-    def typesense_import_documents(jsonl_object,action,collection)
-      raise ArgumentError.new("JSONL object is required") unless jsonl_object
-      self.typesense_client.collections[collection].documents.import(jsonl_object, action: action)
+    def typesense_import_documents(jsonl_object, action, collection)
+      raise ArgumentError, 'JSONL object is required' unless jsonl_object
+
+      typesense_client.collections[collection].documents.import(jsonl_object, action: action)
     end
 
-    def typesense_retrieve_document(object_id,collection=nil)
+    def typesense_retrieve_document(object_id, collection = nil)
       if collection
-      self.typesense_client.collections[collection].documents[object_id].retrieve
+        typesense_client.collections[collection].documents[object_id].retrieve
       else
-        collectionObj=algolia_ensure_init()
-        self.typesense_client.collections[collectionObj[:alias_name]].documents[object_id].retrieve
+        collection_obj = algolia_ensure_init
+        typesense_client.collections[collection_obj[:alias_name]].documents[object_id].retrieve
       end
     end
 
-    def typesense_delete_document(object_id,collection)
-      self.typesense_client.collections[collection].documents[object_id].delete
+    def typesense_delete_document(object_id, collection)
+      typesense_client.collections[collection].documents[object_id].delete
     end
-    def typesense_delete_by_query(collection,query)
-      self.typesense_client.collections[collection].documents.delete('filter_by': query)
+
+    def typesense_delete_by_query(collection, query)
+      typesense_client.collections[collection].documents.delete('filter_by': query)
     end
 
     def typesense_delete_collection(collection)
-       self.typesense_client.collections[collection].delete
+      typesense_client.collections[collection].delete
     end
 
-
-
-    def typesense_search_collection(search_parameters,collection)
-      self.typesense_client.collections[collection].documents.search(search_parameters)
+    def typesense_search_collection(search_parameters, collection)
+      typesense_client.collections[collection].documents.search(search_parameters)
     end
 
-
-
-    def typesense_multi_way_synonyms(collection,synonyms)
+    def typesense_multi_way_synonyms(collection, synonyms)
       synonyms.each do |synonym_hash|
-      synonym_hash.each do |synonym_name,synonym|
-        self.typesense_client.collections[collection].synonyms.upsert(
-          synonym_name,
-          {"synonyms"=> synonym}
-        )
+        synonym_hash.each do |synonym_name, synonym|
+          typesense_client.collections[collection].synonyms.upsert(
+            synonym_name,
+            { 'synonyms' => synonym }
+          )
+        end
       end
     end
-    end
 
-    def typesense_one_way_synonyms(collection,synonyms)
+    def typesense_one_way_synonyms(collection, synonyms)
       synonyms.each do |synonym_hash|
-      synonym_hash.each do |synonym_name,synonym|
-      self.typesense_client.collections[collection].synonyms.upsert(
-        synonym_name,
-        synonym
-      )
+        synonym_hash.each do |synonym_name, synonym|
+          typesense_client.collections[collection].synonyms.upsert(
+            synonym_name,
+            synonym
+          )
+        end
       end
-    end
     end
 
     def algoliasearch(options = {}, &block)
       self.algoliasearch_settings = IndexSettings.new(options, &block)
-      self.algoliasearch_options = { :type => algolia_full_const_get(model_name.to_s)}.merge(options) #:per_page => algoliasearch_settings.get_setting(:hitsPerPage) || 10, :page => 1
-      self.typesense_client||=AlgoliaSearch.client
+      self.algoliasearch_options = { type: algolia_full_const_get(model_name.to_s) }.merge(options) # :per_page => algoliasearch_settings.get_setting(:hitsPerPage) || 10, :page => 1
+      self.typesense_client ||= AlgoliaSearch.client
       attr_accessor :highlight_result, :snippet_result
 
-      # if options[:synchronous] == true
-      #   if defined?(::Sequel) && self < Sequel::Model
-      #     class_eval do
-      #       copy_after_validation = instance_method(:after_validation)
-      #       define_method(:after_validation) do |*args|
-      #         super(*args)
-      #         copy_after_validation.bind(self).call
-      #         algolia_mark_synchronous
-      #       end
-      #     end
-      #   else
-      #     after_validation :algolia_mark_synchronous if respond_to?(:after_validation)
-      #   end
-      # end
       if options[:enqueue]
-        #raise ArgumentError.new("Cannot use a enqueue if the `synchronous` option if set") if options[:synchronous]
         proc = if options[:enqueue] == true
-            Proc.new do |record, remove|
-              AlgoliaJob.perform_later(record, remove ? "algolia_remove_from_index!" : "algolia_index!")
-            end
-          elsif options[:enqueue].respond_to?(:call)
-            options[:enqueue]
-          elsif options[:enqueue].is_a?(Symbol)
-            Proc.new { |record, remove| self.send(options[:enqueue], record, remove) }
-          else
-            raise ArgumentError.new("Invalid `enqueue` option: #{options[:enqueue]}")
-          end
-        algoliasearch_options[:enqueue] = Proc.new do |record, remove|
+                 proc do |record, remove|
+                   AlgoliaJob.perform_later(record, remove ? 'algolia_remove_from_index!' : 'algolia_index!')
+                 end
+               elsif options[:enqueue].respond_to?(:call)
+                 options[:enqueue]
+               elsif options[:enqueue].is_a?(Symbol)
+                 proc { |record, remove| send(options[:enqueue], record, remove) }
+               else
+                 raise ArgumentError, "Invalid `enqueue` option: #{options[:enqueue]}"
+               end
+        algoliasearch_options[:enqueue] = proc do |record, remove|
           proc.call(record, remove) unless algolia_without_auto_index_scope
         end
       end
@@ -523,7 +392,7 @@ module AlgoliaSearch
             end
 
             sequel_version = Gem::Version.new(Sequel.version)
-            if sequel_version >= Gem::Version.new("4.0.0") && sequel_version < Gem::Version.new("5.0.0")
+            if sequel_version >= Gem::Version.new('4.0.0') && sequel_version < Gem::Version.new('5.0.0')
               copy_after_commit = instance_method(:after_commit)
               define_method(:after_commit) do |*args|
                 super(*args)
@@ -535,7 +404,7 @@ module AlgoliaSearch
               define_method(:after_save) do |*args|
                 super(*args)
                 copy_after_save.bind(self).call
-                self.db.after_commit do
+                db.after_commit do
                   algolia_perform_index_tasks
                 end
               end
@@ -558,17 +427,17 @@ module AlgoliaSearch
 
             define_method(:after_destroy) do |*args|
               copy_after_destroy.bind(self).call
-              algolia_enqueue_remove_from_index!()#algolia_synchronous?)
+              algolia_enqueue_remove_from_index!
               super(*args)
             end
           end
-        else
-          after_destroy { |searchable| searchable.algolia_enqueue_remove_from_index!() } if respond_to?(:after_destroy)
+        elsif respond_to?(:after_destroy)
+          after_destroy { |searchable| searchable.algolia_enqueue_remove_from_index! }
         end
       end
     end
 
-    def algolia_without_auto_index(&block)
+    def algolia_without_auto_index
       self.algolia_without_auto_index_scope = true
       begin
         yield
@@ -578,176 +447,131 @@ module AlgoliaSearch
     end
 
     def algolia_without_auto_index_scope=(value)
-      Thread.current["algolia_without_auto_index_scope_for_#{self.model_name}"] = value
+      Thread.current["algolia_without_auto_index_scope_for_#{model_name}"] = value
     end
 
     def algolia_without_auto_index_scope
-      Thread.current["algolia_without_auto_index_scope_for_#{self.model_name}"]
+      Thread.current["algolia_without_auto_index_scope_for_#{model_name}"]
     end
 
-    def algolia_reindex!(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)#, synchronous = false)
+    def algolia_reindex!(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
       puts "\n\ntypesense_reindex!: Reindexes all objects in database(does not remove deleted objects from the collection).\n\n"
-      #return if algolia_without_auto_index_scope
+      return if algolia_without_auto_index_scope
+
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
-        collectionObj = algolia_ensure_init(options,settings)
-        #next if options[:replica]
-        # last_task = nil
+
+        collection_obj = algolia_ensure_init(options, settings)
 
         algolia_find_in_batches(batch_size) do |group|
           if algolia_conditional_index?(options)
-            #delete non-indexable objects
-            ids = group.select { |o| !algolia_indexable?(o, options) }.map { |o| algolia_object_id_of(o, options) }
-            self.delete_by_query(collectionObj[:alias_name],'id:'+ids.select { |id| !id.blank? }.to_s)
-            #self.typesense_client.collections[collectionObj[:alias_name]].documents.delete('filter_by': 'id:'+ids.select { |id| !id.blank? }.to_s)
-            # index.delete_objects(ids.select { |id| !id.blank? })
-            # select only indexable objects
+            # delete non-indexable objects
+            ids = group.reject { |o| algolia_indexable?(o, options) }.map { |o| algolia_object_id_of(o, options) }
+            delete_by_query(collection_obj[:alias_name], "id: #{ids.reject(&:blank?)}")
+
             group = group.select { |o| algolia_indexable?(o, options) }
           end
           documents = group.map do |o|
             attributes = settings.get_attributes(o)
-            unless attributes.class == Hash
-             attributes = attributes.to_hash
-            end
-            #convert to JSON object
-            attributes.merge!("id"=> algolia_object_id_of(o, options)).to_json
+            attributes = attributes.to_hash unless attributes.instance_of?(Hash)
+            # convert to JSON object
+            attributes.merge!('id' => algolia_object_id_of(o, options)).to_json
           end
-          #last_task = index.save_objects(objects)
-          #converting to JSONL
-          jsonl_object=documents.join("\n")
-          created_documents=self.import_documents(jsonl_object,'upsert',collectionObj[:alias_name])
+
+          jsonl_object = documents.join("\n")
+          import_documents(jsonl_object, 'upsert', collection_obj[:alias_name])
         end
-        puts "\n\nAll objects reindexed! #{self.num_documents(collectionObj[:alias_name])} documents upserted.\n\n"
-        puts self.get_collection(collectionObj[:alias_name])
-        # index.wait_task(last_task.raw_response["taskID"]) if last_task and (synchronous || options[:synchronous])
+        puts "\n\nAll objects reindexed! #{num_documents(collection_obj[:alias_name])} documents upserted.\n\n"
+        puts get_collection(collection_obj[:alias_name])
       end
       nil
     end
 
     # reindex whole database using a extra temporary index + move operation
-    def algolia_reindex(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)#, synchronous = false)
+    def algolia_reindex(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
       puts "\n\ntypesense_reindex: Reindexes whole database using alias(removes deleted objects from collection).\n\n"
-      # return if algolia_without_auto_index_scope
+      return if algolia_without_auto_index_scope
+
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
-        # next if options[:replica]
-
-        # fetch the master settings
 
         begin
-          master_index = algolia_ensure_init(options,settings,false)
-          self.delete_collection(master_index[:alias_name])
+          master_index = algolia_ensure_init(options, settings, false)
+          delete_collection(master_index[:alias_name])
         rescue ArgumentError
-          @algolia_indexes[settings] = {collection_name: "",alias_name: algolia_index_name(options)}
-          master_index=@algolia_indexes[settings]
+          @algolia_indexes[settings] = { collection_name: '', alias_name: algolia_index_name(options) }
+          master_index = @algolia_indexes[settings]
         end
 
-        #master_settings = master_index.get_settings rescue {} # if master doesn't exist yet
-        #master_settings.merge!(JSON.parse(settings.to_settings.to_json)) # convert symbols to strings
-
-        # remove the replicas of the temporary index
-        # master_settings.delete :replicas
-        # master_settings.delete "replicas"
-
         # init temporary index
-        src_index_name = self.collection_name(options)
-        #tmp_index_name = "#{src_index_name}.tmp"
-        tmp_options = options.merge({ :index_name => src_index_name })
-         tmp_options.delete(:per_environment) # already included in the temporary index_name
-         tmp_settings = settings.dup
+        src_index_name = collection_name(options)
+        tmp_options = options.merge({ index_name: src_index_name })
+        tmp_options.delete(:per_environment) # already included in the temporary index_name
+        tmp_settings = settings.dup
 
-        # if options[:check_settings] == false
-          #@client.copy_index!(src_index_name, tmp_index_name, %w(settings synonyms rules))
-          #tmp_index = SafeIndex.new(tmp_index_name)#, !!options[:raise_on_failure])
-          self.create_collection(src_index_name,settings)
-        # else
-        #   tmp_index = algolia_ensure_init(tmp_options, tmp_settings, master_settings)
-        # end
+        create_collection(src_index_name, settings)
+
         algolia_find_in_batches(batch_size) do |group|
           if algolia_conditional_index?(options)
             # select only indexable objects
             group = group.select { |o| algolia_indexable?(o, tmp_options) }
           end
-          documents= group.map { |o| tmp_settings.get_attributes(o).merge!("id" => algolia_object_id_of(o, tmp_options)).to_json }
-          #tmp_index.save_objects(objects)
-          jsonl_object=documents.join("\n")
-          created_documents=self.import_documents(jsonl_object,'upsert',src_index_name)
+          documents = group.map do |o|
+            tmp_settings.get_attributes(o).merge!('id' => algolia_object_id_of(o, tmp_options)).to_json
+          end
+          jsonl_object = documents.join("\n")
+          import_documents(jsonl_object, 'upsert', src_index_name)
         end
 
-        self.upsert_alias(src_index_name,master_index[:alias_name])
-        master_index[:collection_name]=src_index_name
-        puts "\n\nAll objects reindexed! #{self.num_documents(master_index[:alias_name])} documents upserted.\n\n"
-        #move_task = SafeIndex.move_index(tmp_index.name, src_index_name)
-        #master_index.wait_task(move_task.raw_response["taskID"]) if synchronous || options[:synchronous]
+        upsert_alias(src_index_name, master_index[:alias_name])
+        master_index[:collection_name] = src_index_name
+        puts "\n\nAll objects reindexed! #{num_documents(master_index[:alias_name])} documents upserted.\n\n"
       end
       nil
     end
 
-    # def algolia_set_settings(synchronous = false)
-    #   algolia_configurations.each do |options, settings|
-    #     if options[:primary_settings] && options[:inherit]
-    #       primary = options[:primary_settings].to_settings
-    #       primary.delete :replicas
-    #       primary.delete "replicas"
-    #       final_settings = primary.merge(settings.to_settings)
-    #     else
-    #       final_settings = settings.to_settings
-    #     end
-
-    #     index = SafeIndex.new(algolia_index_name(options))#, true)
-    #     task = index.set_settings(final_settings)
-    #     index.wait_task(task.raw_response["taskID"]) if synchronous
-    #   end
-    # end
-
-    def algolia_index_objects(objects)#, synchronous = false)
+    def algolia_index_objects(objects)
       puts "\n\ntypesense_index_objects: Upserts given object array into collection of given model.\n\n"
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
-        collectionObj = algolia_ensure_init(options,settings)
-        #next if options[:replica]
-        documents=objects.map { |o| settings.get_attributes(o).merge!("id" => algolia_object_id_of(o, options)).to_json }
-        jsonl_object=documents.join("\n")
-        created_documents=self.import_documents(jsonl_object,'upsert',collectionObj[:alias_name])
-        puts "\n\n#{objects.length} objects upserted into #{collectionObj[:collection_name]}!\n\n"
-        #task = index.save_objects(objects.map { |o| settings.get_attributes(o).merge "objectID" => algolia_object_id_of(o, options) })
-        #index.wait_task(task.raw_response["taskID"]) if synchronous || options[:synchronous]
+
+        collection_obj = algolia_ensure_init(options, settings)
+        documents = objects.map do |o|
+          settings.get_attributes(o).merge!('id' => algolia_object_id_of(o, options)).to_json
+        end
+        jsonl_object = documents.join("\n")
+        import_documents(jsonl_object, 'upsert', collection_obj[:alias_name])
+        puts "\n\n#{objects.length} objects upserted into #{collection_obj[:collection_name]}!\n\n"
       end
       nil
     end
 
-    def algolia_index!(object)#, synchronous = false)
-       puts "\n\ntypesense_index!: Creates a document for the object and retrieves it.\n\n"
+    def algolia_index!(object)
+      puts "\n\ntypesense_index!: Creates a document for the object and retrieves it.\n\n"
       return if algolia_without_auto_index_scope
+
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
+
         object_id = algolia_object_id_of(object, options)
-        collectionObj = algolia_ensure_init(options,settings)
-        #next if options[:replica]
+        collection_obj = algolia_ensure_init(options, settings)
+
         if algolia_indexable?(object, options)
-          raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
-          # if synchronous || options[:synchronous]
-          #   index.save_object!(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
-          # else
-            #index.save_object(settings.get_attributes(object).merge "objectID" => algolia_object_id_of(object, options))
-          # end
-          object=settings.get_attributes(object).merge!("id"=> object_id)
+          raise ArgumentError, 'Cannot index a record with a blank objectID' if object_id.blank?
+
+          object = settings.get_attributes(object).merge!('id' => object_id)
 
           if options[:dirty_values]
-            self.upsert_document(object,collectionObj[:alias_name],options[:dirty_values])
+            upsert_document(object, collection_obj[:alias_name], options[:dirty_values])
           else
-            self.upsert_document(object,collectionObj[:alias_name])
+            upsert_document(object, collection_obj[:alias_name])
           end
-          puts "\n\nDocument upserted into #{collectionObj[:collection_name]} :\n\t#{self.retrieve_document(object_id,collectionObj[:alias_name])}\n\n"
+          puts "\n\nDocument upserted into #{collection_obj[:collection_name]} :\n\t#{retrieve_document(object_id,
+                                                                                                        collection_obj[:alias_name])}\n\n"
         elsif algolia_conditional_index?(options) && !object_id.blank?
-          #   remove non-indexable objects
-          #   if synchronous || options[:synchronous]
-          #     index.delete_object!(object_id)
-          #   else
-          #     index.delete_object(object_id)
-          #   end
+
           begin
-          self.delete_document(object_id,collectionObj[:collection_name])
+            delete_document(object_id, collection_obj[:collection_name])
           rescue Typesense::Error::ObjectNotFound => e
             puts "Object not found in index: #{e.message}"
           end
@@ -756,53 +580,46 @@ module AlgoliaSearch
       nil
     end
 
-    def algolia_remove_from_index!(object)#, synchronous = false)
+    def algolia_remove_from_index!(object)
       puts "\n\ntypesense_remove_from_index: Removes specified object from the collection of given model.\n\n"
-      #return if algolia_without_auto_index_scope
+      return if algolia_without_auto_index_scope
+
       object_id = algolia_object_id_of(object)
-      raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
+      raise ArgumentError, 'Cannot index a record with a blank objectID' if object_id.blank?
+
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
-        collectionObj = algolia_ensure_init(options,  settings,false)
-        #next if options[:replica]
-        # if synchronous || options[:synchronous]
-        #   index.delete_object!(object_id)
-        # else
-          #index.delete_object(object_id)
-        # end
+
+        collection_obj = algolia_ensure_init(options, settings, false)
+
         begin
-          self.delete_document(object_id,collectionObj[:alias_name])
+          delete_document(object_id, collection_obj[:alias_name])
         rescue Typesense::Error::ObjectNotFound => e
-          puts "\n\nObject #{object_id} could not be removed from #{collectionObj[:collection_name]} collection! Use reindex to update the collection.\n\n"
+          puts "\n\nObject #{object_id} could not be removed from #{collection_obj[:collection_name]} collection! Use reindex to update the collection.\n\n"
         end
-        puts "\n\nRemoved document with object id '#{object_id}' from #{collectionObj[:collection_name]}\n\n"
+        puts "\n\nRemoved document with object id '#{object_id}' from #{collection_obj[:collection_name]}\n\n"
       end
       nil
     end
 
-    def algolia_clear_index!()#synchronous = false)
+    def algolia_clear_index!
       puts "\n\ntypesense_clear_index!: Delete collection of given model."
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
-        collectionObj = algolia_ensure_init(options,settings,false)
-        #next if options[:replica]
-        #synchronous || options[:synchronous] ? index.clear_objects! : index.clear_objects
-        self.delete_collection(collectionObj[:alias_name])
-        puts "\n\nDeleted #{collectionObj[:alias_name]} collection!\n\n"
+
+        collection_obj = algolia_ensure_init(options, settings, false)
+
+        delete_collection(collection_obj[:alias_name])
+        puts "\n\nDeleted #{collection_obj[:alias_name]} collection!\n\n"
         @algolia_indexes[settings] = nil
       end
       nil
     end
 
-    def algolia_raw_search(q,query_by, params = {})
+    def algolia_raw_search(q, query_by, params = {})
       puts "\n\ntypesense_raw_search: JSON output of search.\n\n"
-      # index_name = params.delete(:index) ||
-      #              params.delete("index") ||
-      #              params.delete(:replica) ||
-      #              params.delete("replica")
-      collectionObj = algolia_index()#index_name)
-      self.search_collection(params.merge({'q': q,'query_by': query_by }),collectionObj[:alias_name])
-      # index.search(q, Hash[params.map { |k, v| [k.to_s, v.to_s] }])
+      collection_obj = algolia_index # index_name)
+      search_collection(params.merge({ 'q': q, 'query_by': query_by }), collection_obj[:alias_name])
     end
 
     module AdditionalMethods
@@ -818,7 +635,7 @@ module AlgoliaSearch
       end
 
       def algolia_facets
-        @algolia_json["facets"]
+        @algolia_json['facets']
       end
 
       private
@@ -828,59 +645,40 @@ module AlgoliaSearch
       end
     end
 
-    def algolia_search(q,query_by, params = {})
+    def algolia_search(q, query_by, params = {})
       puts "\n\ntypsense_search: Searches and returns matching objects from the database.\n\n"
-      # if AlgoliaSearch.configuration[:pagination_backend]
-      #   # kaminari and will_paginate start pagination at 1, Algolia starts at 0
-      #   params[:page] = (params.delete("page") || params.delete(:page)).to_i
-      #   params[:page] -= 1 if params[:page].to_i > 0
-      # end
-      json = algolia_raw_search(q,query_by, params)
-      hit_ids = json["hits"].map { |hit| hit["document"]["id"] }
 
-      if defined?(::Mongoid::Document) && self.include?(::Mongoid::Document)
-        condition_key = algolia_object_id_method.in
-      else
-        condition_key = algolia_object_id_method
-      end
+      json = algolia_raw_search(q, query_by, params)
+      hit_ids = json['hits'].map { |hit| hit['document']['id'] }
 
+      condition_key = if defined?(::Mongoid::Document) && include?(::Mongoid::Document)
+                        algolia_object_id_method.in
+                      else
+                        algolia_object_id_method
+                      end
 
       results_by_id = algoliasearch_options[:type].where(condition_key => hit_ids).index_by do |hit|
         algolia_object_id_of(hit)
       end
 
-      results = json["hits"].map do |hit|
-        o = results_by_id[hit["document"]["id"].to_s]
-        if o
-          o.highlight_result = hit["highlights"]
-          o.snippet_result = hit["highlights"].map { |highlight|
-            highlight["snippet"]
-          }
-          o
+      results = json['hits'].map do |hit|
+        o = results_by_id[hit['document']['id'].to_s]
+        next unless o
+
+        o.highlight_result = hit['highlights']
+        o.snippet_result = hit['highlights'].map do |highlight|
+          highlight['snippet']
         end
+        o
       end.compact
-      # Algolia has a default limit of 1000 retrievable hits
-      # total_hits = json["nbHits"].to_i < json["nbPages"].to_i * json["hitsPerPage"].to_i ?
-      #   json["nbHits"].to_i : json["nbPages"].to_i * json["hitsPerPage"].to_i
-      total_hits=json["found"]
-      res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json["page"].to_i, :per_page => json["request_params"]["per_page"] }))
+
+      total_hits = json['found']
+      res = AlgoliaSearch::Pagination.create(results, total_hits,
+                                             algoliasearch_options.merge({ page: json['page'].to_i, per_page: json['request_params']['per_page'] }))
       res.extend(AdditionalMethods)
       res.send(:algolia_init_raw_answer, json)
       res
     end
-
-    # def algolia_search_for_facet_values(facet, text, params = {})
-    #   index_name = params.delete(:index) ||
-    #                params.delete("index") ||
-    #                params.delete(:replica) ||
-    #                params.delete("replicas")
-    #   index = algolia_index(index_name)
-    #   query = Hash[params.map { |k, v| [k.to_s, v.to_s] }]
-    #   index.search_for_facet_values(facet, text, query)["facetHits"]
-    # end
-
-    # # deprecated (renaming)
-    # alias :algolia_search_facet :algolia_search_for_facet_values
 
     def algolia_index(name = nil)
       puts "\n\ntypesense_index: Creates collection and its alias.\n\n"
@@ -888,27 +686,28 @@ module AlgoliaSearch
         algolia_configurations.each do |o, s|
           return algolia_ensure_init(o, s) if o[:index_name].to_s == name.to_s
         end
-        raise ArgumentError.new("Invalid index/replica name: #{name}")
+        raise ArgumentError, "Invalid index/replica name: #{name}"
       end
       algolia_ensure_init
     end
 
-
     def algolia_index_name(options = nil)
       options ||= algoliasearch_options
-      name = options[:index_name] || model_name.to_s.gsub("::", "_")
-      name = "#{name}_#{Rails.env.to_s}" if options[:per_environment]
+      name = options[:index_name] || model_name.to_s.gsub('::', '_')
+      name = "#{name}_#{Rails.env}" if options[:per_environment]
       name
     end
 
     def algolia_must_reindex?(object)
       # use +algolia_dirty?+ method if implemented
-      return object.send(:algolia_dirty?) if (object.respond_to?(:algolia_dirty?))
+      return object.send(:algolia_dirty?) if object.respond_to?(:algolia_dirty?)
+
       # Loop over each index to see if a attribute used in records has changed
       algolia_configurations.each do |options, settings|
         next if algolia_indexing_disabled?(options)
-        #next if options[:replica]
+        # next if options[:replica]
         return true if algolia_object_id_changed?(object, options)
+
         settings.get_attribute_names(object).each do |k|
           return true if algolia_attribute_changed?(object, k)
           # return true if !object.respond_to?(changed_method) || object.send(changed_method)
@@ -927,49 +726,36 @@ module AlgoliaSearch
         end
       end
       # By default, we don't reindex
-      return false
+      false
     end
 
     protected
 
-    def algolia_ensure_init(options=nil, settings=nil,create=true)
-
-      raise ArgumentError.new("No `algoliasearch` block found in your model.") if algoliasearch_settings.nil?
+    def algolia_ensure_init(options = nil, settings = nil, create = true)
+      raise ArgumentError, 'No `algoliasearch` block found in your model.' if algoliasearch_settings.nil?
 
       @algolia_indexes ||= {}
 
       options ||= algoliasearch_options
       settings ||= algoliasearch_settings
 
-      return @algolia_indexes[settings] if @algolia_indexes[settings] and  self.get_collection(@algolia_indexes[settings][:alias_name])
+      if @algolia_indexes[settings] && get_collection(@algolia_indexes[settings][:alias_name])
+        return @algolia_indexes[settings]
+      end
 
-      alias_name=algolia_index_name(options)
-      collection=self.get_collection(alias_name)
+      alias_name = algolia_index_name(options)
+      collection = get_collection(alias_name)
 
       if collection
-              collection_name=collection["name"]
+        collection_name = collection['name']
       else
-        collection_name=self.collection_name(options)
-        raise ArgumentError.new("#{collection_name} is not found in your model.") unless create
-        self.create_collection(collection_name,settings)
-        self.upsert_alias(collection_name,alias_name)
+        collection_name = self.collection_name(options)
+        raise ArgumentError, "#{collection_name} is not found in your model." unless create
+
+        create_collection(collection_name, settings)
+        upsert_alias(collection_name, alias_name)
       end
-      @algolia_indexes[settings] = {collection_name: collection_name,alias_name: alias_name}#SafeIndex.new(algolia_index_name(options))#, algoliasearch_options[:raise_on_failure])
-
-
-      # current_settings = @algolia_indexes[settings].get_settings(:getVersion => 1) rescue nil # if the index doesn't exist
-
-      # index_settings ||= settings.to_settings
-      # index_settings = options[:primary_settings].to_settings.merge(index_settings) if options[:inherit]
-
-      # options[:check_settings] = true if options[:check_settings].nil?
-
-      # if !algolia_indexing_disabled?(options) && options[:check_settings] && algoliasearch_settings_changed?(current_settings, index_settings)
-      #   replicas = index_settings.delete(:replicas) ||
-      #              index_settings.delete("replicas")
-      #   index_settings[:replicas] = replicas unless replicas.nil? || options[:inherit]
-      #   @algolia_indexes[settings].set_settings!(index_settings)
-      # end
+      @algolia_indexes[settings] = { collection_name: collection_name, alias_name: alias_name }
 
       @algolia_indexes[settings]
     end
@@ -977,19 +763,11 @@ module AlgoliaSearch
     private
 
     def algolia_configurations
-      raise ArgumentError.new("No `algoliasearch` block found in your model.") if algoliasearch_settings.nil?
+      raise ArgumentError, 'No `algoliasearch` block found in your model.' if algoliasearch_settings.nil?
+
       if @configurations.nil?
         @configurations = {}
         @configurations[algoliasearch_options] = algoliasearch_settings
-        # algoliasearch_settings.additional_indexes.each do |k, v|
-        #   @configurations[k] = v
-
-        #   if v.additional_indexes.any?
-        #     v.additional_indexes.each do |options, index|
-        #       @configurations[options] = index
-        #     end
-        #   end
-        # end
       end
       @configurations
     end
@@ -1010,20 +788,21 @@ module AlgoliaSearch
 
     def algoliasearch_settings_changed?(prev, current)
       return true if prev.nil?
+
       current.each do |k, v|
         prev_v = prev[k.to_s]
-        if v.is_a?(Array) and prev_v.is_a?(Array)
+        if v.is_a?(Array) && prev_v.is_a?(Array)
           # compare array of strings, avoiding symbols VS strings comparison
-          return true if v.map { |x| x.to_s } != prev_v.map { |x| x.to_s }
-        else
-          return true if prev_v != v
+          return true if v.map(&:to_s) != prev_v.map(&:to_s)
+        elsif prev_v != v
+          return true
         end
       end
       false
     end
 
     def algolia_full_const_get(name)
-      list = name.split("::")
+      list = name.split('::')
       list.shift if list.first.blank?
       obj = Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9 ? Object : self
       list.each do |x|
@@ -1056,17 +835,15 @@ module AlgoliaSearch
         # All constraints must pass
         constraint.all? { |inner_constraint| algolia_constraint_passes?(object, inner_constraint) }
       else
-        if constraint.respond_to?(:call) # Proc
-          constraint.call(object)
-        else
-          raise ArgumentError, "Unknown constraint type: #{constraint} (#{constraint.class})"
-        end
+        raise ArgumentError, "Unknown constraint type: #{constraint} (#{constraint.class})" unless constraint.respond_to?(:call)
+
+        constraint.call(object)
       end
     end
 
     def algolia_indexing_disabled?(options = nil)
       options ||= algoliasearch_options
-      constraint = options[:disable_indexing] || options["disable_indexing"]
+      constraint = options[:disable_indexing] || options['disable_indexing']
       case constraint
       when nil
         return false
@@ -1082,7 +859,7 @@ module AlgoliaSearch
 
     def algolia_find_in_batches(batch_size, &block)
       if (defined?(::ActiveRecord) && ancestors.include?(::ActiveRecord::Base)) || respond_to?(:find_in_batches)
-        find_in_batches(:batch_size => batch_size, &block)
+        find_in_batches(batch_size: batch_size, &block)
       elsif defined?(::Sequel) && self < Sequel::Model
         dataset.extension(:pagination).each_page(batch_size, &block)
       else
@@ -1090,7 +867,7 @@ module AlgoliaSearch
         items = []
         all.each do |item|
           items << item
-          if items.length % batch_size == 0
+          if items.length % batch_size.zero?
             yield items
             items = []
           end
@@ -1116,26 +893,26 @@ module AlgoliaSearch
         # See: https://github.com/algolia/algoliasearch-rails/pull/338
         # This feature is not compatible with Ruby 1.8
         # In this case, we always call #{attr_name}_changed?
-        if Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9
-          return object.send(method_name)
-        end
+        return object.send(method_name) if Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9
         unless automatic_changed_method?(object, method_name) && automatic_changed_method_deprecated?
           return object.send(method_name)
         end
       end
 
-      if object.respond_to?("will_save_change_to_#{attr_name}?")
-        return object.send("will_save_change_to_#{attr_name}?")
-      end
+      return object.send("will_save_change_to_#{attr_name}?") if object.respond_to?("will_save_change_to_#{attr_name}?")
 
       # We don't know if the attribute has changed, so conservatively assume it has
       true
     end
 
     def automatic_changed_method?(object, method_name)
-      raise ArgumentError.new("Method #{method_name} doesn't exist on #{object.class.name}") unless object.respond_to?(method_name)
+      unless object.respond_to?(method_name)
+        raise ArgumentError,
+              "Method #{method_name} doesn't exist on #{object.class.name}"
+      end
+
       file = object.method(method_name).source_location[0]
-      file.end_with?("active_model/attribute_methods.rb")
+      file.end_with?('active_model/attribute_methods.rb')
     end
 
     def automatic_changed_method_deprecated?
@@ -1153,39 +930,33 @@ module AlgoliaSearch
       end
     end
 
-    def algolia_index!()#synchronous = false)
-      self.class.algolia_index!(self)#, synchronous || algolia_synchronous?)
+    def algolia_index!
+      self.class.algolia_index!(self)
     end
 
-    def algolia_remove_from_index!()#synchronous = false)
-      self.class.algolia_remove_from_index!(self)#, synchronous || algolia_synchronous?)
+    def algolia_remove_from_index!
+      self.class.algolia_remove_from_index!(self)
     end
 
-    def algolia_enqueue_remove_from_index!()#synchronous)
+    def algolia_enqueue_remove_from_index!
       if algoliasearch_options[:enqueue]
-        algoliasearch_options[:enqueue].call(self, true) unless self.class.send(:algolia_indexing_disabled?, algoliasearch_options)
+        algoliasearch_options[:enqueue].call(self, true) unless self.class.send(:algolia_indexing_disabled?,
+                                                                                algoliasearch_options)
       else
-        algolia_remove_from_index!()#synchronous || algolia_synchronous?)
+        algolia_remove_from_index!
       end
     end
 
-    def algolia_enqueue_index!()#synchronous)
+    def algolia_enqueue_index!
       if algoliasearch_options[:enqueue]
-        algoliasearch_options[:enqueue].call(self, false) unless self.class.send(:algolia_indexing_disabled?, algoliasearch_options)
+        algoliasearch_options[:enqueue].call(self, false) unless self.class.send(:algolia_indexing_disabled?,
+                                                                                 algoliasearch_options)
       else
-        algolia_index!()#synchronous)
+        algolia_index!
       end
     end
 
     private
-
-    # def algolia_synchronous?
-    #   @algolia_synchronous == true
-    # end
-
-    # def algolia_mark_synchronous
-    #   @algolia_synchronous = true
-    # end
 
     def algolia_mark_for_auto_indexing
       @algolia_auto_indexing = true
@@ -1195,18 +966,18 @@ module AlgoliaSearch
       # algolia_must_reindex flag is reset after every commit as part. If we must reindex at any point in
       # a stransaction, keep flag set until it is explicitly unset
       @algolia_must_reindex ||= if defined?(::Sequel) && is_a?(Sequel::Model)
-          new? || self.class.algolia_must_reindex?(self)
-        else
-          new_record? || self.class.algolia_must_reindex?(self)
-        end
+                                  new? || self.class.algolia_must_reindex?(self)
+                                else
+                                  new_record? || self.class.algolia_must_reindex?(self)
+                                end
       true
     end
 
     def algolia_perform_index_tasks
       return if !@algolia_auto_indexing || @algolia_must_reindex == false
-      algolia_enqueue_index!()#algolia_synchronous?)
+
+      algolia_enqueue_index!
       remove_instance_variable(:@algolia_auto_indexing) if instance_variable_defined?(:@algolia_auto_indexing)
-      #remove_instance_variable(:@algolia_synchronous) if instance_variable_defined?(:@algolia_synchronous)
       remove_instance_variable(:@algolia_must_reindex) if instance_variable_defined?(:@algolia_must_reindex)
     end
   end
