@@ -697,7 +697,7 @@ describe 'Colors' do
       Color.create!(name: 'blue', short_name: 'b', hex: 0xFF0000)
     end
     expect(Color.search('blue', 'name').size).to eq(1)
-    Color.reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE) # , true)
+    Color.reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
     expect(Color.search('blue', 'name').size).to eq(2)
   end
 
@@ -730,10 +730,10 @@ describe 'Colors' do
 
   it 'should use the specified scope' do
     Color.clear_index!
-    Color.where(name: 'red').reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE) # , true)
+    Color.where(name: 'red').reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
     expect(Color.search('*', '').size).to eq(3)
     Color.clear_index!
-    Color.where(id: Color.first.id).reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE) # , true)
+    Color.where(id: Color.first.id).reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
     expect(Color.search('*', '').size).to eq(1)
   end
 
@@ -743,7 +743,7 @@ describe 'Colors' do
 
   it 'should include the _highlightResult and _snippetResults' do
     @green = Color.create!(name: 'green', short_name: 'gre', hex: 0x00FF00)
-    results = Color.search('green', 'name', { 'highlight_fields' => ['short_name'] }) # , :attributesToHighlight => ['name'])
+    results = Color.search('green', 'name', { 'highlight_fields' => ['short_name'] })
     expect(results.size).to eq(1)
     expect(results[0].highlight_result).to_not be_nil
     expect(results[0].snippet_result).to_not be_nil
@@ -751,7 +751,7 @@ describe 'Colors' do
 
   it 'should index an array of objects' do
     json = Color.raw_search('*', '')
-    Color.index_objects Color.limit(1) # , true # reindex last color, `limit` is incompatible with the reindex! method
+    Color.index_objects Color.limit(1)
     json['found'].should eq(Color.raw_search('*', '')['found'])
   end
 
@@ -773,25 +773,25 @@ describe 'An imaginary store' do
       ArgumentError
     end
     # Google products
-    @blackberry = Product.create!(name: 'blackberry', href: 'google') # :tags => ['decent', 'businessmen love it'])
-    @nokia = Product.create!(name: 'nokia', href: 'google') # , :tags => ['decent'])
+    @blackberry = Product.create!(name: 'blackberry', href: 'google')
+    @nokia = Product.create!(name: 'nokia', href: 'google')
 
     # Amazon products
-    @android = Product.create!(name: 'android', href: 'amazon') # , :tags => ['awesome'])
-    @samsung = Product.create!(name: 'samsung', href: 'amazon') # , :tags => ['decent'])
+    @android = Product.create!(name: 'android', href: 'amazon')
+    @samsung = Product.create!(name: 'samsung', href: 'amazon')
     @motorola = Product.create!(name: 'motorola', href: 'amazon',
-                                description: "Not sure about features since I've never owned one.") # , :tags => ['decent'],
+                                description: "Not sure about features since I've never owned one.")
 
     # Ebay products
-    @palmpre = Product.create!(name: 'palmpre', href: 'ebay') # , :tags => ['discontinued', 'worst phone ever'])
-    @palm_pixi_plus = Product.create!(name: 'palm pixi plus', href: 'ebay') # , :tags => ['terrible'])
-    @lg_vortex = Product.create!(name: 'lg vortex', href: 'ebay') # , :tags => ['decent'])
-    @t_mobile = Product.create!(name: 't mobile', href: 'ebay') # , :tags => ['terrible'])
+    @palmpre = Product.create!(name: 'palmpre', href: 'ebay')
+    @palm_pixi_plus = Product.create!(name: 'palm pixi plus', href: 'ebay')
+    @lg_vortex = Product.create!(name: 'lg vortex', href: 'ebay')
+    @t_mobile = Product.create!(name: 't mobile', href: 'ebay')
 
     # Yahoo products
-    @htc = Product.create!(name: 'htc', href: 'yahoo') # , :tags => ['decent'])
-    @htc_evo = Product.create!(name: 'htc evo', href: 'yahoo') # , :tags => ['decent'])
-    @ericson = Product.create!(name: 'ericson', href: 'yahoo') # , :tags => ['decent'])
+    @htc = Product.create!(name: 'htc', href: 'yahoo')
+    @htc_evo = Product.create!(name: 'htc evo', href: 'yahoo')
+    @ericson = Product.create!(name: 'ericson', href: 'yahoo')
 
     # Apple products
     @iphone = Product.create!(name: 'iphone', href: 'apple',
@@ -810,7 +810,7 @@ describe 'An imaginary store' do
 
     @products_in_database = Product.all
 
-    Product.reindex(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE) # , true)
+    Product.reindex(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
     sleep 5
   end
 
@@ -843,13 +843,11 @@ describe 'An imaginary store' do
     it 'should find all "palm" phones with wildcard word search' do
       results = Product.search('pal', 'name')
 
-      # expect(results.size).to eq(2)
       results.should include(@palmpre, @palm_pixi_plus)
     end
 
     it 'should search multiple words from the same field' do
       results = Product.search('palm pixi plus', 'name')
-      # expect(results.size).to eq(1)
       results.should include(@palm_pixi_plus)
     end
 
@@ -861,7 +859,6 @@ describe 'An imaginary store' do
 
     it 'should not search on non-indexed fields' do
       expect { Product.search('features', 'description') }.to raise_error(Typesense::Error)
-      # expect(results.size).to eq(0)
     end
 
     it 'should delete the associated record' do
@@ -878,8 +875,6 @@ describe 'An imaginary store' do
     it 'should return the other results if those are still available locally' do
       Product.without_auto_index { @palmpre.destroy }
       results = Product.search('pal', 'name')
-
-      # JSON.parse(Product.search('pal',"name").to_json).size.should == 1
       results.should include(@palm_pixi_plus)
     end
 
@@ -911,7 +906,6 @@ describe 'An imaginary store' do
     it 'should include items belong to subclasses' do
       @camera.index!
       results = Product.search('eos rebel', 'name')
-      # expect(results.size).to eq(1)
       results.should include(@camera)
     end
 
