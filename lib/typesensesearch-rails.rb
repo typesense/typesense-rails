@@ -2,6 +2,7 @@
 require 'typesense'
 require 'typesensesearch/version'
 require 'typesensesearch/utilities'
+require 'rails/all'
 
 if defined? Rails
   begin
@@ -17,6 +18,8 @@ rescue LoadError
 end
 
 require 'logger'
+Rails.logger = Logger.new(STDOUT)
+Rails.logger.level = Logger::INFO
 
 module TypesenseSearch
   class NotConfigured < StandardError; end
@@ -264,7 +267,7 @@ module TypesenseSearch
             default_sorting_field ? { 'default_sorting_field' => default_sorting_field } : {}
           )
       )
-      puts "\n\nCollection '#{collection_name}' created!\n\n"
+      Rails.logger.info "Collection '#{collection_name}' created!"
 
       typesense_multi_way_synonyms(collection_name, multi_way_synonyms) if multi_way_synonyms
 
