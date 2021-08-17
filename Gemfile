@@ -38,3 +38,5 @@ group :test, :development do
   gem 'will_paginate', '>= 2.3.15'
   gem 'kaminari', '< 1'
 end
+
+gem "lefthook", "~> 0.7.6"
