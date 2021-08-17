@@ -207,7 +207,6 @@ module TypesenseSearch
   if defined?(::ActiveJob::Base)
     # lazy load the ActiveJob class to ensure the
     # queue is initialized before using it
-    # see https://github.com/typesense/typesense-rails/issues/69
     autoload :TypesenseJob, 'typesensesearch/typesense_job'
   end
 
@@ -456,7 +455,7 @@ module TypesenseSearch
     end
 
     def typesense_reindex!(batch_size = TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
-      puts "\n\ntypesense_reindex!: Reindexes all objects in database(does not remove deleted objects from the collection).\n\n"
+      # typesense_reindex!: Reindexes all objects in database(does not remove deleted objects from the collection)
       return if typesense_without_auto_index_scope
 
       typesense_configurations.each do |options, settings|
@@ -482,15 +481,12 @@ module TypesenseSearch
           jsonl_object = documents.join("\n")
           import_documents(jsonl_object, 'upsert', collection_obj[:alias_name])
         end
-        puts "\n\nAll objects reindexed! #{num_documents(collection_obj[:alias_name])} documents upserted.\n\n"
-        puts get_collection(collection_obj[:alias_name])
       end
       nil
     end
 
-    # reindex whole database using a extra temporary index + move operation
     def typesense_reindex(batch_size = TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
-      puts "\n\ntypesense_reindex: Reindexes whole database using alias(removes deleted objects from collection).\n\n"
+      # typesense_reindex: Reindexes whole database using alias(removes deleted objects from collection)
       return if typesense_without_auto_index_scope
 
       typesense_configurations.each do |options, settings|
@@ -526,13 +522,12 @@ module TypesenseSearch
 
         upsert_alias(src_index_name, master_index[:alias_name])
         master_index[:collection_name] = src_index_name
-        puts "\n\nAll objects reindexed! #{num_documents(master_index[:alias_name])} documents upserted.\n\n"
       end
       nil
     end
 
     def typesense_index_objects(objects)
-      puts "\n\ntypesense_index_objects: Upserts given object array into collection of given model.\n\n"
+      # typesense_index_objects: Upserts given object array into collection of given model.
       typesense_configurations.each do |options, settings|
         next if typesense_indexing_disabled?(options)
 
@@ -542,13 +537,13 @@ module TypesenseSearch
         end
         jsonl_object = documents.join("\n")
         import_documents(jsonl_object, 'upsert', collection_obj[:alias_name])
-        puts "\n\n#{objects.length} objects upserted into #{collection_obj[:collection_name]}!\n\n"
+        Rails.logger.info "#{objects.length} objects upserted into #{collection_obj[:collection_name]}!"
       end
       nil
     end
 
     def typesense_index!(object)
-      puts "\n\ntypesense_index!: Creates a document for the object and retrieves it.\n\n"
+      # typesense_index!: Creates a document for the object and retrieves it.
       return if typesense_without_auto_index_scope
 
       typesense_configurations.each do |options, settings|
@@ -567,14 +562,13 @@ module TypesenseSearch
           else
             upsert_document(object, collection_obj[:alias_name])
           end
-          puts "\n\nDocument upserted into #{collection_obj[:collection_name]} :\n\t#{retrieve_document(object_id,
-                                                                                                        collection_obj[:alias_name])}\n\n"
+
         elsif typesense_conditional_index?(options) && !object_id.blank?
 
           begin
             delete_document(object_id, collection_obj[:collection_name])
           rescue Typesense::Error::ObjectNotFound => e
-            puts "Object not found in index: #{e.message}"
+            Rails.logger.error "Object not found in index: #{e.message}"
           end
         end
       end
@@ -582,7 +576,7 @@ module TypesenseSearch
     end
 
     def typesense_remove_from_index!(object)
-      puts "\n\ntypesense_remove_from_index: Removes specified object from the collection of given model.\n\n"
+      # typesense_remove_from_index: Removes specified object from the collection of given model.
       return if typesense_without_auto_index_scope
 
       object_id = typesense_object_id_of(object)
@@ -596,29 +590,29 @@ module TypesenseSearch
         begin
           delete_document(object_id, collection_obj[:alias_name])
         rescue Typesense::Error::ObjectNotFound => e
-          puts "\n\nObject #{object_id} could not be removed from #{collection_obj[:collection_name]} collection! Use reindex to update the collection.\n\n"
+          Rails.logger.error "Object #{object_id} could not be removed from #{collection_obj[:collection_name]} collection! Use reindex to update the collection."
         end
-        puts "\n\nRemoved document with object id '#{object_id}' from #{collection_obj[:collection_name]}\n\n"
+        Rails.logger.info "Removed document with object id '#{object_id}' from #{collection_obj[:collection_name]}"
       end
       nil
     end
 
     def typesense_clear_index!
-      puts "\n\ntypesense_clear_index!: Delete collection of given model."
+      # typesense_clear_index!: Delete collection of given model.
       typesense_configurations.each do |options, settings|
         next if typesense_indexing_disabled?(options)
 
         collection_obj = typesense_ensure_init(options, settings, false)
 
         delete_collection(collection_obj[:alias_name])
-        puts "\n\nDeleted #{collection_obj[:alias_name]} collection!\n\n"
+        Rails.logger.info "Deleted #{collection_obj[:alias_name]} collection!"
         @typesense_indexes[settings] = nil
       end
       nil
     end
 
     def typesense_raw_search(q, query_by, params = {})
-      puts "\n\ntypesense_raw_search: JSON output of search.\n\n"
+      # typesense_raw_search: JSON output of search.
       collection_obj = typesense_index # index_name)
       search_collection(params.merge({ 'q': q, 'query_by': query_by }), collection_obj[:alias_name])
     end
@@ -647,7 +641,7 @@ module TypesenseSearch
     end
 
     def typesense_search(q, query_by, params = {})
-      puts "\n\ntypsense_search: Searches and returns matching objects from the database.\n\n"
+      # typsense_search: Searches and returns matching objects from the database.
 
       json = typesense_raw_search(q, query_by, params)
       hit_ids = json['hits'].map { |hit| hit['document']['id'] }
@@ -682,7 +676,7 @@ module TypesenseSearch
     end
 
     def typesense_index(name = nil)
-      puts "\n\ntypesense_index: Creates collection and its alias.\n\n"
+      # typesense_index: Creates collection and its alias.
       if name
         typesense_configurations.each do |o, s|
           return typesense_ensure_init(o, s) if o[:index_name].to_s == name.to_s
