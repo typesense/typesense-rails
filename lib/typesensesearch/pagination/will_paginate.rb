@@ -5,7 +5,7 @@ rescue LoadError
         "Typesense: Please add 'will_paginate' to your Gemfile to use will_paginate pagination backend")
 end
 
-module AlgoliaSearch
+module TypesenseSearch
   module Pagination
     class WillPaginate
       def self.create(results, total_hits, options = {})

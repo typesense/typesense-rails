@@ -5,7 +5,7 @@ end
 
 require 'kaminari/models/array_extension'
 
-module AlgoliaSearch
+module TypesenseSearch
   module Pagination
     class Kaminari < ::Kaminari::PaginatableArray
       def initialize(array, options)

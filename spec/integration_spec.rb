@@ -12,7 +12,7 @@ require 'logger'
 require 'sequel'
 require 'active_model_serializers'
 
-AlgoliaSearch.configuration = {
+TypesenseSearch.configuration = {
   nodes: [{
     host: 'localhost',   # For Typesense Cloud use xxx.a1.typesense.net
     port: 8108,          # For Typesense Cloud use 443
@@ -36,9 +36,7 @@ ActiveRecord::Base.establish_connection(
   'timeout' => 5000
 )
 
-if ActiveRecord::Base.respond_to?(:raise_in_transactional_callbacks)
-  ActiveRecord::Base.raise_in_transactional_callbacks = true
-end
+ActiveRecord::Base.raise_in_transactional_callbacks = true if ActiveRecord::Base.respond_to?(:raise_in_transactional_callbacks)
 
 SEQUEL_DB = Sequel.connect(if defined?(JRUBY_VERSION)
                              'jdbc:sqlite:sequel_data.sqlite3'
@@ -146,11 +144,11 @@ ActiveRecord::Schema.define do
 end
 
 class Product < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch auto_index: false,
-                if: :published?, unless: ->(o) { o.href.blank? },
-                index_name: safe_index_name('my_products_index') do
+  typesense auto_index: false,
+            if: :published?, unless: ->(o) { o.href.blank? },
+            index_name: safe_index_name('my_products_index') do
     attribute :href, :name # , :tags
 
     multi_way_synonyms [
@@ -172,10 +170,10 @@ class Camera < Product
 end
 
 class Color < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
   attr_accessor :not_indexed
 
-  algoliasearch index_name: safe_index_name('Color'), per_environment: true do
+  typesense index_name: safe_index_name('Color'), per_environment: true do
     predefined_fields [
       { 'name' => 'name', 'type' => 'string', 'facet' => true },
       { 'name' => 'short_name', 'type' => 'string', 'index' => false, 'optional' => true },
@@ -197,23 +195,23 @@ class Color < ActiveRecord::Base
 end
 
 class DisabledBoolean < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch disable_indexing: true, index_name: safe_index_name('DisabledBoolean') do
+  typesense disable_indexing: true, index_name: safe_index_name('DisabledBoolean') do
   end
 end
 
 class DisabledProc < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch disable_indexing: proc { true }, index_name: safe_index_name('DisabledProc') do
+  typesense disable_indexing: proc { true }, index_name: safe_index_name('DisabledProc') do
   end
 end
 
 class DisabledSymbol < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch disable_indexing: :truth, index_name: safe_index_name('DisabledSymbol') do
+  typesense disable_indexing: :truth, index_name: safe_index_name('DisabledSymbol') do
   end
 
   def self.truth
@@ -228,9 +226,9 @@ module Namespaced
 end
 
 class Namespaced::Model < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch index_name: safe_index_name(algolia_index_name({})) do
+  typesense index_name: safe_index_name(typesense_index_name({})) do
     attribute :customAttr do
       40 + another_private_value
     end
@@ -241,17 +239,17 @@ class Namespaced::Model < ActiveRecord::Base
 end
 
 class UniqUser < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch index_name: safe_index_name('UniqUser'), per_environment: true, id: :name do
+  typesense index_name: safe_index_name('UniqUser'), per_environment: true, id: :name do
   end
 end
 
 class NullableId < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch index_name: safe_index_name('NullableId'), per_environment: true, id: :custom_id,
-                if: :never do
+  typesense index_name: safe_index_name('NullableId'), per_environment: true, id: :custom_id,
+            if: :never do
   end
 
   def custom_id
@@ -266,9 +264,9 @@ end
 class NestedItem < ActiveRecord::Base
   has_many :children, class_name: 'NestedItem', foreign_key: 'parent_id'
 
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch index_name: safe_index_name('NestedItem'), per_environment: true, unless: :hidden do
+  typesense index_name: safe_index_name('NestedItem'), per_environment: true, unless: :hidden do
     attribute :nb_children
   end
 
@@ -278,7 +276,7 @@ class NestedItem < ActiveRecord::Base
 end
 
 class City < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
   serialize :gl_array
 
@@ -286,7 +284,7 @@ class City < ActiveRecord::Base
     lat.present? && lng.present? ? [lat, lng] : gl_array
   end
 
-  algoliasearch index_name: safe_index_name('City'), per_environment: true do
+  typesense index_name: safe_index_name('City'), per_environment: true do
     add_attribute :a_null_lat, :a_lng, :location
 
     predefined_fields [{ 'name' => 'location', 'type' => 'geopoint' }]
@@ -304,9 +302,9 @@ end
 class SequelBook < Sequel::Model(SEQUEL_DB)
   plugin :active_model
 
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch index_name: safe_index_name('SequelBook'), per_environment: true, sanitize: true do
+  typesense index_name: safe_index_name('SequelBook'), per_environment: true, sanitize: true do
     add_attribute :test
     add_attribute :test2
   end
@@ -352,9 +350,9 @@ describe 'SequelBook' do
 end
 
 class MongoObject < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch index_name: safe_index_name('MongoObject') do
+  typesense index_name: safe_index_name('MongoObject') do
   end
 
   def self.reindex!
@@ -367,9 +365,9 @@ class MongoObject < ActiveRecord::Base
 end
 
 class Book < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch index_name: safe_index_name('SecuredBook'), per_environment: true, sanitize: true do
+  typesense index_name: safe_index_name('SecuredBook'), per_environment: true, sanitize: true do
   end
 
   private
@@ -380,13 +378,13 @@ class Book < ActiveRecord::Base
 end
 
 class Ebook < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
   attr_accessor :current_time, :published_at
 
-  algoliasearch index_name: safe_index_name('eBooks') do
+  typesense index_name: safe_index_name('eBooks') do
   end
 
-  def algolia_dirty?
+  def typesense_dirty?
     return true if published_at.nil? || current_time.nil?
 
     # Consider dirty if published date is in the past
@@ -396,9 +394,9 @@ class Ebook < ActiveRecord::Base
 end
 
 class EncodedString < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch force_utf8_encoding: true, index_name: safe_index_name('EncodedString') do
+  typesense force_utf8_encoding: true, index_name: safe_index_name('EncodedString') do
     attribute :value do
       "\xC2\xA0\xE2\x80\xA2\xC2\xA0".force_encoding('ascii-8bit')
     end
@@ -406,14 +404,14 @@ class EncodedString < ActiveRecord::Base
 end
 
 class SubReplicas < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch force_utf8_encoding: true, index_name: safe_index_name('SubReplicas') do
+  typesense force_utf8_encoding: true, index_name: safe_index_name('SubReplicas') do
   end
 end
 
 class EnqueuedObject < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
   include GlobalID::Identification
 
@@ -425,24 +423,24 @@ class EnqueuedObject < ActiveRecord::Base
     EnqueuedObject.first
   end
 
-  algoliasearch enqueue: proc { |record| raise "enqueued #{record.id}" },
-                index_name: safe_index_name('EnqueuedObject') do
+  typesense enqueue: proc { |record| raise "enqueued #{record.id}" },
+            index_name: safe_index_name('EnqueuedObject') do
     attributes ['name']
   end
 end
 
 class DisabledEnqueuedObject < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 
-  algoliasearch(enqueue: proc { |_record| raise 'enqueued' },
-                index_name: safe_index_name('EnqueuedObject'),
-                disable_indexing: true) do
+  typesense(enqueue: proc { |_record| raise 'enqueued' },
+            index_name: safe_index_name('EnqueuedObject'),
+            disable_indexing: true) do
     attributes ['name']
   end
 end
 
 class MisconfiguredBlock < ActiveRecord::Base
-  include AlgoliaSearch
+  include TypesenseSearch
 end
 
 if defined?(ActiveModel::Serializer)
@@ -451,9 +449,9 @@ if defined?(ActiveModel::Serializer)
   end
 
   class SerializedObject < ActiveRecord::Base
-    include AlgoliaSearch
+    include TypesenseSearch
 
-    algoliasearch index_name: safe_index_name('SerializedObject') do
+    typesense index_name: safe_index_name('SerializedObject') do
       use_serializer SerializedObjectSerializer
     end
   end
@@ -469,7 +467,7 @@ if defined?(ActiveModel::Serializer)
 
     it 'should push the name but not the other attribute' do
       o = SerializedObject.new name: 'test', skip: 'skip me'
-      attributes = SerializedObject.algoliasearch_settings.get_attributes(o)
+      attributes = SerializedObject.typesensesearch_settings.get_attributes(o)
       expect(attributes).to eq({ name: 'test' }) # , "_tags" => ['tag1', 'tag2']})
     end
   end
@@ -494,19 +492,19 @@ end
 
 describe 'Settings' do
   it 'should detect settings changes' do
-    Color.send(:algoliasearch_settings_changed?, nil, {}).should == true
-    Color.send(:algoliasearch_settings_changed?, {}, { 'searchableAttributes' => ['name'] }).should == true
-    Color.send(:algoliasearch_settings_changed?, { 'searchableAttributes' => ['name'] },
+    Color.send(:typesensesearch_settings_changed?, nil, {}).should == true
+    Color.send(:typesensesearch_settings_changed?, {}, { 'searchableAttributes' => ['name'] }).should == true
+    Color.send(:typesensesearch_settings_changed?, { 'searchableAttributes' => ['name'] },
                { 'searchableAttributes' => %w[name hex] }).should == true
-    Color.send(:algoliasearch_settings_changed?, { 'searchableAttributes' => ['name'] },
+    Color.send(:typesensesearch_settings_changed?, { 'searchableAttributes' => ['name'] },
                { 'customRanking' => ['asc(hex)'] }).should == true
   end
 
   it 'should not detect settings changes' do
-    Color.send(:algoliasearch_settings_changed?, {}, {}).should == false
-    Color.send(:algoliasearch_settings_changed?, { 'searchableAttributes' => ['name'] },
+    Color.send(:typesensesearch_settings_changed?, {}, {}).should == false
+    Color.send(:typesensesearch_settings_changed?, { 'searchableAttributes' => ['name'] },
                { searchableAttributes: ['name'] }).should == false
-    Color.send(:algoliasearch_settings_changed?, { 'searchableAttributes' => ['name'], 'customRanking' => ['asc(hex)'] },
+    Color.send(:typesensesearch_settings_changed?, { 'searchableAttributes' => ['name'], 'customRanking' => ['asc(hex)'] },
                { 'customRanking' => ['asc(hex)'] }).should == false
   end
 end
@@ -515,17 +513,17 @@ describe 'Change detection' do
   it 'should detect attribute changes' do
     color = Color.new name: 'dark-blue', short_name: 'blue', hex: 123
 
-    Color.algolia_must_reindex?(color).should == true
+    Color.typesense_must_reindex?(color).should == true
     color.save
-    Color.algolia_must_reindex?(color).should == false
+    Color.typesense_must_reindex?(color).should == false
 
     color.hex = 123_456
-    Color.algolia_must_reindex?(color).should == false
+    Color.typesense_must_reindex?(color).should == false
 
     color.not_indexed = 'strstr'
-    Color.algolia_must_reindex?(color).should == false
+    Color.typesense_must_reindex?(color).should == false
     color.name = 'red'
-    Color.algolia_must_reindex?(color).should == true
+    Color.typesense_must_reindex?(color).should == true
 
     color.delete
   end
@@ -534,28 +532,28 @@ describe 'Change detection' do
     color = Color.new name: 'dark-blue', short_name: 'blue', hex: 123
     color.save
 
-    color.instance_variable_get('@algolia_must_reindex').should.nil?
+    color.instance_variable_get('@typesense_must_reindex').should.nil?
     Color.transaction do
       color.name = 'red'
       color.save
       color.not_indexed = 'strstr'
       color.save
-      color.instance_variable_get('@algolia_must_reindex').should == true
+      color.instance_variable_get('@typesense_must_reindex').should == true
     end
-    color.instance_variable_get('@algolia_must_reindex').should.nil?
+    color.instance_variable_get('@typesense_must_reindex').should.nil?
 
     color.delete
   end
 
-  it 'should detect change with algolia_dirty? method' do
+  it 'should detect change with typesense_dirty? method' do
     ebook = Ebook.new name: 'My life', author: 'Myself', premium: false, released: true
 
-    Ebook.algolia_must_reindex?(ebook).should == true # Because it's defined in algolia_dirty? method
+    Ebook.typesense_must_reindex?(ebook).should == true # Because it's defined in typesense_dirty? method
     ebook.current_time = 10
     ebook.published_at = 8
-    Ebook.algolia_must_reindex?(ebook).should == true
+    Ebook.typesense_must_reindex?(ebook).should == true
     ebook.published_at = 12
-    Ebook.algolia_must_reindex?(ebook).should == false
+    Ebook.typesense_must_reindex?(ebook).should == false
   end
 
   it 'should know if the _changed? method is user-defined',
@@ -591,7 +589,7 @@ describe 'Namespaced::Model' do
 
   it "should use the block to determine attribute's value" do
     m = Namespaced::Model.new(another_private_value: 2)
-    attributes = Namespaced::Model.algoliasearch_settings.get_attributes(m)
+    attributes = Namespaced::Model.typesensesearch_settings.get_attributes(m)
     attributes['customAttr'].should == 42
     attributes['myid'].should == m.id
   end
@@ -641,7 +639,7 @@ describe 'NestedItem' do
     @i2 = NestedItem.create hidden: true
 
     @i1.children << NestedItem.create(hidden: true) << NestedItem.create(hidden: true)
-    NestedItem.where(id: [@i1.id, @i2.id]).reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE) # , true)
+    NestedItem.where(id: [@i1.id, @i2.id]).reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE) # , true)
 
     result = NestedItem.retrieve_document(@i1.id)
     result['nb_children'].should == 2
@@ -697,7 +695,7 @@ describe 'Colors' do
       Color.create!(name: 'blue', short_name: 'b', hex: 0xFF0000)
     end
     expect(Color.search('blue', 'name').size).to eq(1)
-    Color.reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+    Color.reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
     expect(Color.search('blue', 'name').size).to eq(2)
   end
 
@@ -730,10 +728,10 @@ describe 'Colors' do
 
   it 'should use the specified scope' do
     Color.clear_index!
-    Color.where(name: 'red').reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+    Color.where(name: 'red').reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
     expect(Color.search('*', '').size).to eq(3)
     Color.clear_index!
-    Color.where(id: Color.first.id).reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+    Color.where(id: Color.first.id).reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
     expect(Color.search('*', '').size).to eq(1)
   end
 
@@ -810,13 +808,13 @@ describe 'An imaginary store' do
 
     @products_in_database = Product.all
 
-    Product.reindex(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+    Product.reindex(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
     sleep 5
   end
 
   describe 'pagination' do
     it 'should display total results correctly' do
-      results = Product.search('crapoola', 'name', { 'per_page' => AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE })
+      results = Product.search('crapoola', 'name', { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE })
       results.length.should == Product.where(name: 'crapoola').count
     end
   end
@@ -888,12 +886,12 @@ describe 'An imaginary store' do
     end
 
     it 'should not duplicate while reindexing' do
-      n = Product.search('*', '', { 'per_page' => AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE }).length
-      Product.reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
-      expect(Product.search('*', '', { 'per_page' => AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n)
-      Product.reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
-      Product.reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
-      expect(Product.search('*', '', { 'per_page' => AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n)
+      n = Product.search('*', '', { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE }).length
+      Product.reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+      expect(Product.search('*', '', { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n)
+      Product.reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+      Product.reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+      expect(Product.search('*', '', { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n)
     end
 
     it 'should not return products that are not indexable' do
@@ -927,11 +925,11 @@ describe 'An imaginary store' do
     end
 
     it 'should delete not-anymore-indexable product while reindexing' do
-      n = Product.search('*', '', { 'per_page' => AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size
+      n = Product.search('*', '', { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size
       Product.where(release_date: nil).first.update_attribute :release_date, Time.now + 1.day
-      Product.reindex!(AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+      Product.reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
       expect(Product.search('*', '',
-                            { 'per_page' => AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n - 1)
+                            { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n - 1)
     end
 
     it 'should find using multi-way synonyms' do
@@ -971,8 +969,8 @@ describe 'MongoObject' do
   it 'should not have method conflicts' do
     expect { MongoObject.reindex! }.to raise_error(NameError)
     expect { MongoObject.new.index! }.to raise_error(NameError)
-    MongoObject.algolia_reindex!
-    MongoObject.create(name: 'mongo').algolia_index!
+    MongoObject.typesense_reindex!
+    MongoObject.create(name: 'mongo').typesense_index!
   end
 end
 
@@ -1011,7 +1009,7 @@ end
 describe 'Kaminari' do
   before(:all) do
     require 'kaminari'
-    AlgoliaSearch.configuration = {
+    TypesenseSearch.configuration = {
       nodes: [{
         host: 'localhost',   # For Typesense Cloud use xxx.a1.typesense.net
         port: 8108,          # For Typesense Cloud use 443
@@ -1044,7 +1042,7 @@ end
 describe 'Will_paginate' do
   before(:all) do
     require 'will_paginate'
-    AlgoliaSearch.configuration = {
+    TypesenseSearch.configuration = {
       nodes: [{
         host: 'localhost',   # For Typesense Cloud use xxx.a1.typesense.net
         port: 8108,          # For Typesense Cloud use 443
@@ -1134,7 +1132,7 @@ describe 'DisabledEnqueuedObject' do
 end
 
 describe 'Misconfigured Block' do
-  it 'should force the algoliasearch block' do
+  it 'should force the typesense block' do
     expect do
       MisconfiguredBlock.reindex
     end.to raise_error(ArgumentError)

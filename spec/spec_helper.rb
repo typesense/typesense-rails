@@ -7,7 +7,7 @@ Bundler.setup :test
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 
-require 'algoliasearch-rails'
+require 'typesensesearch-rails'
 require 'rspec'
 require 'rails/all'
 
@@ -31,12 +31,12 @@ RSpec.configure do |c|
   c.after(:suite) do
     safe_index_list.each do |i|
       index = i['name']
-      # AlgoliaSearch.client.collections.create(
+      # TypesenseSearch.client.collections.create(
       #   { "name" => index,
       #     "fields" => [{ "name" => ".*", "type" => "auto" }] }
       # )
       # index.delete!
-      AlgoliaSearch.client.collections[index].delete
+      TypesenseSearch.client.collections[index].delete
     end
   end
 end
@@ -51,7 +51,7 @@ end
 
 # get a list of safe indexes in local or CI
 def safe_index_list
-  list = AlgoliaSearch.client.collections.retrieve
+  list = TypesenseSearch.client.collections.retrieve
   list.select { |index| index['name'].include?(SAFE_INDEX_PREFIX) }
   # list.sort_by { |index| index["primary"] || "" }
 end

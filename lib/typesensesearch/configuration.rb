@@ -1,6 +1,6 @@
 require 'typesense'
 
-module AlgoliaSearch
+module TypesenseSearch
   module Configuration
     def initiliaze
       @client = nil
@@ -8,7 +8,7 @@ module AlgoliaSearch
 
     def configuration
       @@configuration || raise(NotConfigured,
-                               "Please configure AlgoliaSearch. Set AlgoliaSearch.configuration = {application_id: 'YOUR_APPLICATION_ID', api_key: 'YOUR_API_KEY'}")
+                               "Please configure TypesenseSearch. Set TypesenseSearch.configuration = {application_id: 'YOUR_APPLICATION_ID', api_key: 'YOUR_API_KEY'}")
     end
 
     def configuration=(configuration)

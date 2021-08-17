@@ -1,7 +1,8 @@
 source "http://rubygems.org"
 
 gem 'json', '>= 1.5.1'
-gem 'algolia', '< 3.0.0'
+#gem 'algolia', '< 3.0.0'
+gem "typesense", "~> 0.13.0"
 
 if defined?(RUBY_ENGINE) && RUBY_ENGINE == 'rbx'
   gem 'rubysl', '~> 2.0', :platform => :rbx
@@ -37,5 +38,3 @@ group :test, :development do
   gem 'will_paginate', '>= 2.3.15'
   gem 'kaminari', '< 1'
 end
-
-gem "typesense", "~> 0.13.0"
