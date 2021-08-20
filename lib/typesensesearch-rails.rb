@@ -132,7 +132,7 @@ module TypesenseSearch
 
     def attributes_to_hash(attributes, object)
       if attributes
-        Hash[attributes.map { |name, value| [name.to_s, value.call(object)] }]
+        attributes.map { |name, value| [name.to_s, value.call(object)] }.to_h
       else
         {}
       end
@@ -318,7 +318,7 @@ module TypesenseSearch
     end
 
     def typesense_delete_by_query(collection, query)
-      typesense_client.collections[collection].documents.delete('filter_by': query)
+      typesense_client.collections[collection].documents.delete(filter_by: query)
     end
 
     def typesense_delete_collection(collection)
@@ -614,7 +614,7 @@ module TypesenseSearch
     def typesense_raw_search(q, query_by, params = {})
       # typesense_raw_search: JSON output of search.
       collection_obj = typesense_index # index_name)
-      search_collection(params.merge({ 'q': q, 'query_by': query_by }), collection_obj[:alias_name])
+      search_collection(params.merge({ q: q, query_by: query_by }), collection_obj[:alias_name])
     end
 
     module AdditionalMethods

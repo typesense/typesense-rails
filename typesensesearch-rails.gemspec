@@ -8,7 +8,6 @@ Gem::Specification.new do |s|
 
   s.required_rubygems_version = Gem::Requirement.new('>= 0') if s.respond_to? :required_rubygems_version=
   s.authors = ['typesense']
-  s.date = Date.today
   s.description = 'TypesenseSearch integration to your favorite ORM'
   s.email = 'contact@typesense.com'
   s.extra_rdoc_files = [
@@ -26,47 +25,43 @@ Gem::Specification.new do |s|
     'LICENSE',
     'README.md',
     'Rakefile',
-    'typesense-rails.gemspec',
-    'lib/typesense-rails.rb',
-    'lib/typesense/algolia_job.rb',
-    'lib/typesense/configuration.rb',
-    'lib/typesense/pagination.rb',
-    'lib/typesense/pagination/kaminari.rb',
-    'lib/typesense/pagination/will_paginate.rb',
-    'lib/typesense/railtie.rb',
-    'lib/typesense/tasks/typesense.rake',
-    'lib/typesense/utilities.rb',
-    'lib/typesense/version.rb',
+    'typesensesearch-rails.gemspec',
+    'lib/typesensesearch-rails.rb',
+    'lib/typesensesearch/algolia_job.rb',
+    'lib/typesensesearch/configuration.rb',
+    'lib/typesensesearch/pagination.rb',
+    'lib/typesensesearch/pagination/kaminari.rb',
+    'lib/typesensesearch/pagination/will_paginate.rb',
+    'lib/typesensesearch/railtie.rb',
+    'lib/typesensesearch/tasks/typesensesearch.rake',
+    'lib/typesensesearch/utilities.rb',
+    'lib/typesensesearch/version.rb',
     'spec/spec_helper.rb',
-    'spec/utilities_spec.rb',
+    'spec/utilities_spec.rb'
   ]
   s.homepage = 'http://github.com/typesense/typesense-rails'
   s.licenses = ['MIT']
   s.require_paths = ['lib']
   s.rubygems_version = '2.1.11'
-  s.summary = 'TypesenseSearch integration to your favorite ORM'
+  s.summary = 'Typesense integration to your favorite ORM'
 
   if s.respond_to? :specification_version
     s.specification_version = 4
 
     if Gem::Version.new(Gem::VERSION) >= Gem::Version.new('1.2.0')
-      # s.add_runtime_dependency('typesense', ['< 3.0.0'])
-      s.add_dependency 'typesense', '>=0.13.0'
-
       s.add_runtime_dependency('json', ['>= 1.5.1'])
+      s.add_runtime_dependency 'typesense', '>=0.13.0'
       s.add_development_dependency('kaminari', ['>= 0'])
       s.add_development_dependency 'rake'
       s.add_development_dependency 'rdoc'
       s.add_development_dependency 'travis'
       s.add_development_dependency('will_paginate', ['>= 2.3.15'])
     else
-      # s.add_dependency('typesense', ['< 3.0.0'])
-      s.add_dependency 'typesense', '>=0.13.0'
-
       s.add_dependency('json', ['>= 1.5.1'])
+      s.add_dependency 'typesense', '>=0.13.0'
     end
   else
     s.add_dependency('json', ['>= 1.5.1'])
-    s.add_dependency('json', ['>= 1.5.1'])
+    s.add_dependency 'typesense', '>=0.13.0'
   end
 end

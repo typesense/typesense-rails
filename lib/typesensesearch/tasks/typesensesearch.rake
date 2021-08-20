@@ -1,4 +1,4 @@
-namespace :typesense do
+namespace :typesensesearch do
   desc 'Reindex all models'
   task reindex: :environment do
     TypesenseSearch::Utilities.reindex_all_models

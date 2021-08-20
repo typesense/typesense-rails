@@ -59,7 +59,6 @@ ActiveRecord::Schema.define do
   create_table :products do |t|
     t.string :name
     t.string :href
-    # t.string :tags
     t.string :type
     t.text :description
     t.datetime :release_date
@@ -149,7 +148,7 @@ class Product < ActiveRecord::Base
   typesense auto_index: false,
             if: :published?, unless: ->(o) { o.href.blank? },
             index_name: safe_index_name('my_products_index') do
-    attribute :href, :name # , :tags
+    attribute :href, :name
 
     multi_way_synonyms [
       { 'phone-synonym' => %w[galaxy samsung samsung_electronics] }
@@ -468,7 +467,7 @@ if defined?(ActiveModel::Serializer)
     it 'should push the name but not the other attribute' do
       o = SerializedObject.new name: 'test', skip: 'skip me'
       attributes = SerializedObject.typesensesearch_settings.get_attributes(o)
-      expect(attributes).to eq({ name: 'test' }) # , "_tags" => ['tag1', 'tag2']})
+      expect(attributes).to eq({ name: 'test' })
     end
   end
 end
@@ -639,7 +638,7 @@ describe 'NestedItem' do
     @i2 = NestedItem.create hidden: true
 
     @i1.children << NestedItem.create(hidden: true) << NestedItem.create(hidden: true)
-    NestedItem.where(id: [@i1.id, @i2.id]).reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE) # , true)
+    NestedItem.where(id: [@i1.id, @i2.id]).reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
 
     result = NestedItem.retrieve_document(@i1.id)
     result['nb_children'].should == 2
@@ -952,7 +951,7 @@ describe 'Cities' do
   it 'should index geo' do
     sf = City.create name: 'San Francisco', country: 'USA', lat: 37.75, lng: -122.68
     mv = City.create name: 'Mountain View', country: 'No man\'s land', lat: 37.38, lng: -122.08
-    sf_and_mv = City.create name: 'San Francisco & Mountain View', country: 'Hybrid', gl_array: [37.75, -122.08] # [{ :lat => 37.75, :lng => -122.68 }, { :lat => 37.38, :lng => -122.08 }]
+    sf_and_mv = City.create name: 'San Francisco & Mountain View', country: 'Hybrid', gl_array: [37.75, -122.08]
     results = City.search('*', '', { 'filter_by' => 'location:(37.33, -121.89,50 km)' })
     expect(results.size).to eq(2)
     results.should include(mv, sf_and_mv)

@@ -31,6 +31,12 @@ Metrics/BlockNesting:
 Style/FrozenStringLiteralComment:
   EnforcedStyle: always_true
 
+Metrics/ModuleLength:
+  Enabled: false
+
+Style/Alias:
+  Enabled: false
+
 Layout/LineLength:
   Max: 300
 
