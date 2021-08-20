@@ -28,11 +28,11 @@ Metrics/BlockLength:
 Metrics/BlockNesting:
   Enabled: false
 
-Style/FrozenStringLiteralComment:
-  EnforcedStyle: always_true
-
 Metrics/ModuleLength:
   Enabled: false
+
+Style/FrozenStringLiteralComment:
+  EnforcedStyle: always_true
 
 Style/Alias:
   Enabled: false

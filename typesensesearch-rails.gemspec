@@ -1,4 +1,4 @@
-require File.join(File.dirname(__FILE__), 'lib', 'typesense', 'version')
+require File.join(File.dirname(__FILE__), 'lib', 'typesensesearch', 'version')
 
 require 'date'
 
