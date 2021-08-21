@@ -1,14 +1,14 @@
-require File.join(File.dirname(__FILE__), 'lib', 'typesensesearch', 'version')
+require File.join(File.dirname(__FILE__), 'lib', 'typesense', 'version')
 
 require 'date'
 
 Gem::Specification.new do |s|
   s.name = 'typesense-rails'
-  s.version = TypesenseSearch::VERSION
+  s.version = Typesense::VERSION
 
   s.required_rubygems_version = Gem::Requirement.new('>= 0') if s.respond_to? :required_rubygems_version=
   s.authors = ['typesense']
-  s.description = 'TypesenseSearch integration to your favorite ORM'
+  s.description = 'Typesense integration to your favorite ORM'
   s.email = 'contact@typesense.com'
   s.extra_rdoc_files = [
     'CHANGELOG.MD',
@@ -25,17 +25,17 @@ Gem::Specification.new do |s|
     'LICENSE',
     'README.md',
     'Rakefile',
-    'typesensesearch-rails.gemspec',
-    'lib/typesensesearch-rails.rb',
-    'lib/typesensesearch/algolia_job.rb',
-    'lib/typesensesearch/configuration.rb',
-    'lib/typesensesearch/pagination.rb',
-    'lib/typesensesearch/pagination/kaminari.rb',
-    'lib/typesensesearch/pagination/will_paginate.rb',
-    'lib/typesensesearch/railtie.rb',
-    'lib/typesensesearch/tasks/typesensesearch.rake',
-    'lib/typesensesearch/utilities.rb',
-    'lib/typesensesearch/version.rb',
+    'typesense-rails.gemspec',
+    'lib/typesense-rails.rb',
+    'lib/typesense/algolia_job.rb',
+    'lib/typesense/configuration.rb',
+    'lib/typesense/pagination.rb',
+    'lib/typesense/pagination/kaminari.rb',
+    'lib/typesense/pagination/will_paginate.rb',
+    'lib/typesense/railtie.rb',
+    'lib/typesense/tasks/typesense.rake',
+    'lib/typesense/utilities.rb',
+    'lib/typesense/version.rb',
     'spec/spec_helper.rb',
     'spec/utilities_spec.rb'
   ]

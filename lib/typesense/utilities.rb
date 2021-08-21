@@ -1,4 +1,4 @@
-module TypesenseSearch
+module Typesense
   module Utilities
     class << self
       def get_model_classes
@@ -7,7 +7,7 @@ module TypesenseSearch
         elsif Rails.application
           Rails.application.eager_load!
         end
-        TypesenseSearch.instance_variable_get :@included_in
+        Typesense.instance_variable_get :@included_in
       end
 
       def clear_all_indexes

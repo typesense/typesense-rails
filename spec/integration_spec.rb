@@ -12,7 +12,7 @@ require 'logger'
 require 'sequel'
 require 'active_model_serializers'
 
-TypesenseSearch.configuration = {
+Typesense.configuration = {
   nodes: [{
     host: 'localhost',   # For Typesense Cloud use xxx.a1.typesense.net
     port: 8108,          # For Typesense Cloud use 443
@@ -143,7 +143,7 @@ ActiveRecord::Schema.define do
 end
 
 class Product < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense auto_index: false,
             if: :published?, unless: ->(o) { o.href.blank? },
@@ -169,7 +169,7 @@ class Camera < Product
 end
 
 class Color < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
   attr_accessor :not_indexed
 
   typesense index_name: safe_index_name('Color'), per_environment: true do
@@ -194,21 +194,21 @@ class Color < ActiveRecord::Base
 end
 
 class DisabledBoolean < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense disable_indexing: true, index_name: safe_index_name('DisabledBoolean') do
   end
 end
 
 class DisabledProc < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense disable_indexing: proc { true }, index_name: safe_index_name('DisabledProc') do
   end
 end
 
 class DisabledSymbol < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense disable_indexing: :truth, index_name: safe_index_name('DisabledSymbol') do
   end
@@ -225,7 +225,7 @@ module Namespaced
 end
 
 class Namespaced::Model < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense index_name: safe_index_name(typesense_index_name({})) do
     attribute :customAttr do
@@ -238,14 +238,14 @@ class Namespaced::Model < ActiveRecord::Base
 end
 
 class UniqUser < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense index_name: safe_index_name('UniqUser'), per_environment: true, id: :name do
   end
 end
 
 class NullableId < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense index_name: safe_index_name('NullableId'), per_environment: true, id: :custom_id,
             if: :never do
@@ -263,7 +263,7 @@ end
 class NestedItem < ActiveRecord::Base
   has_many :children, class_name: 'NestedItem', foreign_key: 'parent_id'
 
-  include TypesenseSearch
+  include Typesense
 
   typesense index_name: safe_index_name('NestedItem'), per_environment: true, unless: :hidden do
     attribute :nb_children
@@ -275,7 +275,7 @@ class NestedItem < ActiveRecord::Base
 end
 
 class City < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   serialize :gl_array
 
@@ -301,7 +301,7 @@ end
 class SequelBook < Sequel::Model(SEQUEL_DB)
   plugin :active_model
 
-  include TypesenseSearch
+  include Typesense
 
   typesense index_name: safe_index_name('SequelBook'), per_environment: true, sanitize: true do
     add_attribute :test
@@ -349,7 +349,7 @@ describe 'SequelBook' do
 end
 
 class MongoObject < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense index_name: safe_index_name('MongoObject') do
   end
@@ -364,7 +364,7 @@ class MongoObject < ActiveRecord::Base
 end
 
 class Book < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense index_name: safe_index_name('SecuredBook'), per_environment: true, sanitize: true do
   end
@@ -377,7 +377,7 @@ class Book < ActiveRecord::Base
 end
 
 class Ebook < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
   attr_accessor :current_time, :published_at
 
   typesense index_name: safe_index_name('eBooks') do
@@ -393,7 +393,7 @@ class Ebook < ActiveRecord::Base
 end
 
 class EncodedString < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense force_utf8_encoding: true, index_name: safe_index_name('EncodedString') do
     attribute :value do
@@ -403,14 +403,14 @@ class EncodedString < ActiveRecord::Base
 end
 
 class SubReplicas < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense force_utf8_encoding: true, index_name: safe_index_name('SubReplicas') do
   end
 end
 
 class EnqueuedObject < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   include GlobalID::Identification
 
@@ -429,7 +429,7 @@ class EnqueuedObject < ActiveRecord::Base
 end
 
 class DisabledEnqueuedObject < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 
   typesense(enqueue: proc { |_record| raise 'enqueued' },
             index_name: safe_index_name('EnqueuedObject'),
@@ -439,7 +439,7 @@ class DisabledEnqueuedObject < ActiveRecord::Base
 end
 
 class MisconfiguredBlock < ActiveRecord::Base
-  include TypesenseSearch
+  include Typesense
 end
 
 if defined?(ActiveModel::Serializer)
@@ -448,7 +448,7 @@ if defined?(ActiveModel::Serializer)
   end
 
   class SerializedObject < ActiveRecord::Base
-    include TypesenseSearch
+    include Typesense
 
     typesense index_name: safe_index_name('SerializedObject') do
       use_serializer SerializedObjectSerializer
@@ -638,7 +638,7 @@ describe 'NestedItem' do
     @i2 = NestedItem.create hidden: true
 
     @i1.children << NestedItem.create(hidden: true) << NestedItem.create(hidden: true)
-    NestedItem.where(id: [@i1.id, @i2.id]).reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+    NestedItem.where(id: [@i1.id, @i2.id]).reindex!(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
 
     result = NestedItem.retrieve_document(@i1.id)
     result['nb_children'].should == 2
@@ -694,7 +694,7 @@ describe 'Colors' do
       Color.create!(name: 'blue', short_name: 'b', hex: 0xFF0000)
     end
     expect(Color.search('blue', 'name').size).to eq(1)
-    Color.reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+    Color.reindex!(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
     expect(Color.search('blue', 'name').size).to eq(2)
   end
 
@@ -727,10 +727,10 @@ describe 'Colors' do
 
   it 'should use the specified scope' do
     Color.clear_index!
-    Color.where(name: 'red').reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+    Color.where(name: 'red').reindex!(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
     expect(Color.search('*', '').size).to eq(3)
     Color.clear_index!
-    Color.where(id: Color.first.id).reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+    Color.where(id: Color.first.id).reindex!(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
     expect(Color.search('*', '').size).to eq(1)
   end
 
@@ -807,13 +807,13 @@ describe 'An imaginary store' do
 
     @products_in_database = Product.all
 
-    Product.reindex(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+    Product.reindex(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
     sleep 5
   end
 
   describe 'pagination' do
     it 'should display total results correctly' do
-      results = Product.search('crapoola', 'name', { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE })
+      results = Product.search('crapoola', 'name', { 'per_page' => Typesense::IndexSettings::DEFAULT_BATCH_SIZE })
       results.length.should == Product.where(name: 'crapoola').count
     end
   end
@@ -885,12 +885,12 @@ describe 'An imaginary store' do
     end
 
     it 'should not duplicate while reindexing' do
-      n = Product.search('*', '', { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE }).length
-      Product.reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
-      expect(Product.search('*', '', { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n)
-      Product.reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
-      Product.reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
-      expect(Product.search('*', '', { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n)
+      n = Product.search('*', '', { 'per_page' => Typesense::IndexSettings::DEFAULT_BATCH_SIZE }).length
+      Product.reindex!(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
+      expect(Product.search('*', '', { 'per_page' => Typesense::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n)
+      Product.reindex!(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
+      Product.reindex!(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
+      expect(Product.search('*', '', { 'per_page' => Typesense::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n)
     end
 
     it 'should not return products that are not indexable' do
@@ -924,11 +924,11 @@ describe 'An imaginary store' do
     end
 
     it 'should delete not-anymore-indexable product while reindexing' do
-      n = Product.search('*', '', { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size
+      n = Product.search('*', '', { 'per_page' => Typesense::IndexSettings::DEFAULT_BATCH_SIZE }).size
       Product.where(release_date: nil).first.update_attribute :release_date, Time.now + 1.day
-      Product.reindex!(TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+      Product.reindex!(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
       expect(Product.search('*', '',
-                            { 'per_page' => TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n - 1)
+                            { 'per_page' => Typesense::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n - 1)
     end
 
     it 'should find using multi-way synonyms' do
@@ -1008,7 +1008,7 @@ end
 describe 'Kaminari' do
   before(:all) do
     require 'kaminari'
-    TypesenseSearch.configuration = {
+    Typesense.configuration = {
       nodes: [{
         host: 'localhost',   # For Typesense Cloud use xxx.a1.typesense.net
         port: 8108,          # For Typesense Cloud use 443
@@ -1041,7 +1041,7 @@ end
 describe 'Will_paginate' do
   before(:all) do
     require 'will_paginate'
-    TypesenseSearch.configuration = {
+    Typesense.configuration = {
       nodes: [{
         host: 'localhost',   # For Typesense Cloud use xxx.a1.typesense.net
         port: 8108,          # For Typesense Cloud use 443

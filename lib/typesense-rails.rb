@@ -1,12 +1,12 @@
 # require 'algolia'
 require 'typesense'
-require 'typesensesearch/version'
-require 'typesensesearch/utilities'
+require 'typesense/version'
+require 'typesense/utilities'
 require 'rails/all'
 
 if defined? Rails
   begin
-    require 'typesensesearch/railtie'
+    require 'typesense/railtie'
   rescue LoadError
   end
 end
@@ -21,7 +21,7 @@ require 'logger'
 Rails.logger = Logger.new(STDOUT)
 Rails.logger.level = Logger::INFO
 
-module TypesenseSearch
+module Typesense
   class NotConfigured < StandardError; end
 
   class BadConfiguration < StandardError; end
@@ -30,10 +30,10 @@ module TypesenseSearch
 
   class MixedSlavesAndReplicas < StandardError; end
 
-  autoload :Configuration, 'typesensesearch/configuration'
-  extend Configuration
+  autoload :Config, 'typesense/config'
+  extend Config
 
-  autoload :Pagination, 'typesensesearch/pagination'
+  autoload :Pagination, 'typesense/pagination'
 
   class << self
     attr_reader :included_in
@@ -53,7 +53,7 @@ module TypesenseSearch
   class IndexSettings
     DEFAULT_BATCH_SIZE = 250
 
-    # TypesenseSearch settings
+    # Typesense settings
     OPTIONS = %i[
       multi_way_synonyms one_way_synonyms predefined_fields default_sorting_field
     ]
@@ -207,10 +207,10 @@ module TypesenseSearch
   if defined?(::ActiveJob::Base)
     # lazy load the ActiveJob class to ensure the
     # queue is initialized before using it
-    autoload :TypesenseJob, 'typesensesearch/typesense_job'
+    autoload :TypesenseJob, 'typesense/typesense_job'
   end
 
-  # these are the class methods added when TypesenseSearch is included
+  # these are the class methods added when Typesense is included
   module ClassMethods
     def self.extended(base)
       class << base
@@ -354,7 +354,7 @@ module TypesenseSearch
     def typesense(options = {}, &block)
       self.typesensesearch_settings = IndexSettings.new(options, &block)
       self.typesensesearch_options = { type: typesense_full_const_get(model_name.to_s) }.merge(options) # :per_page => typesensesearch_settings.get_setting(:hitsPerPage) || 10, :page => 1
-      self.typesense_client ||= TypesenseSearch.client
+      self.typesense_client ||= Typesense.client
       attr_accessor :highlight_result, :snippet_result
 
       if options[:enqueue]
@@ -454,7 +454,7 @@ module TypesenseSearch
       Thread.current["typesense_without_auto_index_scope_for_#{model_name}"]
     end
 
-    def typesense_reindex!(batch_size = TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+    def typesense_reindex!(batch_size = Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
       # typesense_reindex!: Reindexes all objects in database(does not remove deleted objects from the collection)
       return if typesense_without_auto_index_scope
 
@@ -485,7 +485,7 @@ module TypesenseSearch
       nil
     end
 
-    def typesense_reindex(batch_size = TypesenseSearch::IndexSettings::DEFAULT_BATCH_SIZE)
+    def typesense_reindex(batch_size = Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
       # typesense_reindex: Reindexes whole database using alias(removes deleted objects from collection)
       return if typesense_without_auto_index_scope
 
@@ -668,7 +668,7 @@ module TypesenseSearch
       end.compact
 
       total_hits = json['found']
-      res = TypesenseSearch::Pagination.create(results, total_hits,
+      res = Typesense::Pagination.create(results, total_hits,
                                                typesensesearch_options.merge({ page: json['page'].to_i, per_page: json['request_params']['per_page'] }))
       res.extend(AdditionalMethods)
       res.send(:typesense_init_raw_answer, json)

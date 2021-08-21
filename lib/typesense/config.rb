@@ -1,14 +1,14 @@
 require 'typesense'
 
-module TypesenseSearch
-  module Configuration
+module Typesense
+  module Config
     def initiliaze
       @client = nil
     end
 
     def configuration
       @@configuration || raise(NotConfigured,
-                               "Please configure TypesenseSearch. Set TypesenseSearch.configuration = {application_id: 'YOUR_APPLICATION_ID', api_key: 'YOUR_API_KEY'}")
+                               "Please configure Typesense. Set Typesense.configuration = {application_id: 'YOUR_APPLICATION_ID', api_key: 'YOUR_API_KEY'}")
     end
 
     def configuration=(configuration)

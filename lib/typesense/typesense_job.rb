@@ -1,6 +1,6 @@
-module TypesenseSearch
+module Typesense
   class TypesenseJob < ::ActiveJob::Base
-    queue_as :typesensesearch
+    queue_as :typesense
 
     def perform(record, method)
       record.send(method)
