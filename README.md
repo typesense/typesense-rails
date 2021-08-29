@@ -1,192 +1,189 @@
 <p align="center">
-  <a href="https://www.algolia.com">
+  <!-- <a href="https://www.algolia.com">
     <img alt="Algolia for Rails" src="https://raw.githubusercontent.com/algolia/algoliasearch-client-common/master/banners/rails.png" >
-  </a>
+  </a> -->
 
-  <h4 align="center">The perfect starting point to integrate <a href="https://algolia.com" target="_blank">Algolia</a> within your Rails project</h4>
+  <h4 align="center">The ideal place to begin integrating <a href="https://typesense.org" target="_blank">Typesense</a> within your Rails project!</h4>
 
   <p align="center">
-    <a href="https://circleci.com/gh/algolia/algoliasearch-rails"><img src="https://circleci.com/gh/algolia/algoliasearch-rails.svg?style=shield" alt="CircleCI" /></a>
+    <!-- <a href="https://circleci.com/gh/algolia/algoliasearch-rails"><img src="https://circleci.com/gh/algolia/algoliasearch-rails.svg?style=shield" alt="CircleCI" /></a>
     <a href="http://badge.fury.io/rb/algoliasearch-rails"><img src="https://badge.fury.io/rb/algoliasearch-rails.svg" alt="Gem Version"></img></a>
-    <a href="https://codeclimate.com/github/algolia/algoliasearch-rails"><img src="https://codeclimate.com/github/algolia/algoliasearch-rails.svg" alt="Code Climate"></img></a>
+    <a href="https://codeclimate.com/github/algolia/algoliasearch-rails"><img src="https://codeclimate.com/github/algolia/algoliasearch-rails.svg" alt="Code Climate"></img></a> -->
     <img src="https://img.shields.io/badge/ActiveRecord-yes-blue.svg?style=flat-square" alt="ActiveRecord"></img>
     <img src="https://img.shields.io/badge/Mongoid-yes-blue.svg?style=flat-square" alt="Mongoid"></img>
     <img src="https://img.shields.io/badge/Sequel-yes-blue.svg?style=flat-square" alt="Sequel"></img>
   </p>
 </p>
 
-<p align="center">
+<!-- <p align="center">
   <a href="https://www.algolia.com/doc/framework-integration/rails/getting-started/setup/?language=ruby" target="_blank">Documentation</a>  •
   <a href="https://discourse.algolia.com" target="_blank">Community Forum</a>  •
   <a href="http://stackoverflow.com/questions/tagged/algolia" target="_blank">Stack Overflow</a>  •
   <a href="https://github.com/algolia/algoliasearch-rails/issues" target="_blank">Report a bug</a>  •
   <a href="https://www.algolia.com/doc/framework-integration/rails/troubleshooting/faq/" target="_blank">FAQ</a>  •
   <a href="https://www.algolia.com/support" target="_blank">Support</a>
-</p>
+</p> -->
 
+<!--You might be interested in the sample Ruby on Rails application providing a `autocomplete.js`-based auto-completion and `InstantSearch.js`-based instant search results page: [algoliasearch-rails-example](https://github.com/algolia/algoliasearch-rails-example/). -->
 
-This gem let you easily integrate the Algolia Search API to your favorite ORM. It's based on the [algoliasearch-client-ruby](https://github.com/algolia/algoliasearch-client-ruby) gem.
-Rails 3.x, 4.x and 5.x are all supported.
-
-You might be interested in the sample Ruby on Rails application providing a `autocomplete.js`-based auto-completion and `InstantSearch.js`-based instant search results page: [algoliasearch-rails-example](https://github.com/algolia/algoliasearch-rails-example/).
-
-
+This gem makes it simple to link the Typesense API with your preferred ORM. It uses the [typesense-ruby](https://github.com/typesense/typesense-ruby) gem as a foundation. All versions of Rails 3.x, 4.x, and 5.x are supported.
 
 ## API Documentation
 
-You can find the full reference on [Algolia's website](https://www.algolia.com/doc/framework-integration/rails/).
-
-
+<!-- You can find the full reference on [Algolia's website](https://www.algolia.com/doc/framework-integration/rails/). -->
 
 1. **[Setup](#setup)**
-    * [Install](#install)
-    * [Configuration](#configuration)
-    * [Timeouts](#timeouts)
-    * [Notes](#notes)
+
+   - [Install](#install)
+   - [Configuration](#configuration)
+   - [Notes](#notes)
 
 1. **[Usage](#usage)**
-    * [Index Schema](#index-schema)
-    * [Relevancy](#relevancy)
-    * [Indexing](#indexing)
-    * [Frontend Search (realtime experience)](#frontend-search-realtime-experience)
-    * [Backend Search](#backend-search)
-    * [Backend Pagination](#backend-pagination)
-    * [Tags](#tags)
-    * [Faceting](#faceting)
-    * [Faceted search](#faceted-search)
-    * [Group by](#group-by)
-    * [Geo-Search](#geo-search)
+
+   - [Index Schema](#index-schema)
+   - [Indexing](#indexing)
+   - [Frontend Search (realtime experience)](#frontend-search-realtime-experience)
+   - [Backend Search](#backend-search)
+   - [Backend Pagination](#backend-pagination)
+   - [Tags](#tags)
+   - [Faceting](#faceting)
+   - [Faceted search](#faceted-search)
+   - [Group by](#group-by)
+   - [Geo-Search](#geo-search)
 
 1. **[Options](#options)**
-    * [Auto-indexing &amp; asynchronism](#auto-indexing--asynchronism)
-    * [Custom index name](#custom-index-name)
-    * [Per-environment indices](#per-environment-indices)
-    * [Custom attribute definition](#custom-attribute-definition)
-    * [Nested objects/relations](#nested-objectsrelations)
-    * [Custom <code>objectID</code>](#custom-objectid)
-    * [Restrict indexing to a subset of your data](#restrict-indexing-to-a-subset-of-your-data)
-    * [Sanitizer](#sanitizer)
-    * [UTF-8 Encoding](#utf-8-encoding)
-    * [Exceptions](#exceptions)
-    * [Configuration example](#configuration-example)
+
+   - [Auto-indexing &amp; asynchronism](#auto-indexing--asynchronism)
+   - [Custom index name](#custom-index-name)
+   - [Per-environment indices](#per-environment-indices)
+   - [Custom attribute definition](#custom-attribute-definition)
+   - [Nested objects/relations](#nested-objectsrelations)
+   - [Custom <code>objectID</code>](#custom-objectid)
+   - [Restrict indexing to a subset of your data](#restrict-indexing-to-a-subset-of-your-data)
+   - [Sanitizer](#sanitizer)
+   - [UTF-8 Encoding](#utf-8-encoding)
+   - [Exceptions](#exceptions)
+   - [Configuration example](#configuration-example)
 
 1. **[Indices](#indices)**
-    * [Manual indexing](#manual-indexing)
-    * [Manual removal](#manual-removal)
-    * [Reindexing](#reindexing)
-    * [Clearing an index](#clearing-an-index)
-    * [Using the underlying index](#using-the-underlying-index)
-    * [Primary/replica](#primaryreplica)
-    * [Share a single index](#share-a-single-index)
-    * [Target multiple indices](#target-multiple-indices)
+
+   - [Manual indexing](#manual-indexing)
+   - [Manual removal](#manual-removal)
+   - [Reindexing](#reindexing)
+   - [Clearing an index](#clearing-an-index)
+   - [Using the underlying index](#using-the-underlying-index)
+   - [Primary/replica](#primaryreplica)
+   - [Share a single index](#share-a-single-index)
+   - [Target multiple indices](#target-multiple-indices)
 
 1. **[Testing](#testing)**
-    * [Notes](#notes)
+
+   - [Notes](#notes)
 
 1. **[Troubleshooting](#troubleshooting)**
-    * [Frequently asked questions](#frequently-asked-questions)
-
-
+   - [Frequently asked questions](#frequently-asked-questions)
 
 # Setup
 
-
-
 ## Install
 
+1.
+
 ```sh
-gem install algoliasearch-rails
+gem install typesense-rails
 ```
+
+2.
 
 Add the gem to your <code>Gemfile</code>:
 
 ```ruby
-gem "algoliasearch-rails"
+gem "typesense-rails"
 ```
 
-And run:
+3.
 
 ```sh
 bundle install
 ```
 
+Or simply run:
+
+```sh
+bundle add typesense-rails
+```
+
 ## Configuration
 
-Create a new file <code>config/initializers/algoliasearch.rb</code> to setup your <code>APPLICATION_ID</code> and <code>API_KEY</code>.
+Create a new file <code>config/initializers/typesense.rb</code> to configure your API key.
 
 ```ruby
-AlgoliaSearch.configuration = { application_id: 'YourApplicationID', api_key: 'YourAPIKey' }
+Typesense.configuration = {
+  nodes: [{
+    host: 'localhost',   # For Typesense Cloud use xxx.a1.typesense.net
+    port: 8108,          # For Typesense Cloud use 443
+    protocol: 'http'     # For Typesense Cloud use https
+  }],
+  api_key: '<API_KEY>',
+  connection_timeout_seconds: 2
+}
 ```
 
 The gem is compatible with [ActiveRecord](https://github.com/rails/rails/tree/master/activerecord), [Mongoid](https://github.com/mongoid/mongoid) and [Sequel](https://github.com/jeremyevans/sequel).
 
-## Timeouts
-
-You can configure a various timeout thresholds by setting the following options at initialization time:
-
-```ruby
-AlgoliaSearch.configuration = {
-  application_id: 'YourApplicationID',
-  api_key: 'YourAPIKey',
-  connect_timeout: 2,
-  receive_timeout: 30,
-  send_timeout: 30,
-  batch_timeout: 120,
-  search_timeout: 5
-}
-```
-
 ## Notes
 
-This gem makes extensive use of Rails' callbacks to trigger the indexing tasks. If you're using methods bypassing `after_validation`, `before_save` or `after_commit` callbacks, it will not index your changes. For example: `update_attribute` doesn't perform validations checks, to perform validations when updating use `update_attributes`.
+To initiate the indexing operations, this gem extensively uses Rails callbacks. It will not index your modifications if you use methods that bypass the `after_validation`, `before_save`, or `after_commit` callbacks. `update_attribute`, for example, does not do validation checks. Instead, `update_attributes` is used to perform validations when updating.
 
-All methods injected by the `AlgoliaSearch` module are prefixed by `algolia_` and aliased to the associated short names if they aren't already defined.
+All methods injected by the `Typesense` module are prefixed with `typesense_`.If the associated short names aren't already defined,the methods are aliased to them.
 
 ```ruby
-Contact.algolia_reindex! # <=> Contact.reindex!
+Episode.algolia_reindex! # <=> Episode.reindex!
 
-Contact.algolia_search("jon doe") # <=> Contact.search("jon doe")
+Episode.algolia_search("jesse") # <=> Episode.search("jesse")
 ```
-
-
 
 # Usage
 
-
-
 ## Index Schema
 
-The following code will create a <code>Contact</code> index and add search capabilities to your <code>Contact</code> model:
+The following code will provide search capabilities to your model and generate a collection:
 
 ```ruby
-class Contact < ActiveRecord::Base
-  include AlgoliaSearch
+class Episode < ApplicationRecord
+  belongs_to :show
 
-  algoliasearch do
-    attributes :first_name, :last_name, :email
+  include Typesense
+
+  typesense per_environment: true do
+    # all attributes will be indexed
   end
 end
 ```
 
-You can either specify the attributes to send (here we restricted to <code>:first_name, :last_name, :email</code>) or not (in that case, all attributes are sent).
+You may either define the attributes for your collection (here we limited to :name, :summary) or you can leave them blank (in that case, all attributes are indexed).
 
 ```ruby
-class Product < ActiveRecord::Base
-  include AlgoliaSearch
+class Episode < ApplicationRecord
+  belongs_to :show
 
-  algoliasearch do
-    # all attributes will be sent
+  include Typesense
+
+  typesense per_environment: true do
+    attributes :name, :summary
   end
 end
 ```
 
-You can also use the <code>add_attribute</code> method, to send all model attributes + extra ones:
+You may also use the <code>add_attribute</code> method to transmit all model attributes as well as any additional attributes:
 
 ```ruby
-class Product < ActiveRecord::Base
-  include AlgoliaSearch
+class Episode < ApplicationRecord
+  belongs_to :show
 
-  algoliasearch do
+  include Typesense
+
+  typesense per_environment: true do
     # all attributes + extra_attr will be sent
     add_attribute :extra_attr
   end
@@ -197,57 +194,34 @@ class Product < ActiveRecord::Base
 end
 ```
 
-## Relevancy
-
-We provide many ways to configure your index allowing you to tune your overall index relevancy. The most important ones are the **searchable attributes** and the attributes reflecting **record popularity**.
-
-```ruby
-class Product < ActiveRecord::Base
-  include AlgoliaSearch
-
-  algoliasearch do
-    # list of attribute used to build an Algolia record
-    attributes :title, :subtitle, :description, :likes_count, :seller_name
-
-    # the `searchableAttributes` (formerly known as attributesToIndex) setting defines the attributes
-    # you want to search in: here `title`, `subtitle` & `description`.
-    # You need to list them by order of importance. `description` is tagged as
-    # `unordered` to avoid taking the position of a match into account in that attribute.
-    searchableAttributes ['title', 'subtitle', 'unordered(description)']
-
-    # the `customRanking` setting defines the ranking criteria use to compare two matching
-    # records in case their text-relevance is equal. It should reflect your record popularity.
-    customRanking ['desc(likes_count)']
-  end
-
-end
-```
-
 ## Indexing
 
-To index a model, simple call `reindex` on the class:
+Simply call reindex on the class to index a model:
 
 ```ruby
-Product.reindex
+Episode.reindex  # => Creates a new collection everytime
+Episode.reindex! # => Upserts all documents without removing deleted objects
 ```
 
-To index all of your models, you can do something like this:
+You can do something like this to reindex all your models:
 
 ```ruby
 Rails.application.eager_load! # Ensure all models are loaded (required in development).
 
-algolia_models = ActiveRecord::Base.descendants.select{ |model| model.respond_to?(:reindex) }
+typesense_models = ActiveRecord::Base.descendants.select{ |model| model.respond_to?(:reindex) }
 
-algolia_models.each(&:reindex)
+typesense_models.each(&:reindex)
 ```
 
 ## Frontend Search (realtime experience)
 
-Traditional search implementations tend to have search logic and functionality on the backend. This made sense when the search experience consisted of a user entering a search query, executing that search, and then being redirected to a search result page.
+Backend search logic and functionality are common in traditional search systems. When the search experience consisted of a user inputting a search query, running the search, and then being sent to a search result page, this made sense.
 
-Implementing search on the backend is no longer necessary. In fact, in most cases it is harmful to performance because of added network and processing latency. We highly recommend the usage of our [JavaScript API Client](https://github.com/algolia/algoliasearch-client-javascript) issuing all search requests directly from the end user's browser, mobile device, or client. It will reduce the overall search latency while offloading your servers at the same time.
+It is no longer necessary to implement search on the backend. In fact, due of the additional network and processor latency, it is usually detrimental to performance. All search requests can be sent directly from the end user's browser, mobile device, or client using our [JavaScript API Client](https://github.com/typesense/typesense-js). It will lower overall search latency while simultaneously offloading your servers.
 
-The JS API client is part of the gem, just require `algolia/v3/algoliasearch.min` somewhere in your JavaScript manifest, for example in `application.js` if you are using Rails 3.1+:
+You can use the [InstantSearch.js](https://github.com/algolia/instantsearch.js) and our [Typesense-InstantSearch-Adapter](https://github.com/typesense/typesense-instantsearch-adapter) to build a realtime search experience with amazing UI in just a few lines of code.
+
+<!-- The JS API client is part of the gem, just require `algolia/v3/algoliasearch.min` somewhere in your JavaScript manifest, for example in `application.js` if you are using Rails 3.1+:
 
 ```javascript
 //= require algolia/v3/algoliasearch.min
@@ -256,24 +230,27 @@ The JS API client is part of the gem, just require `algolia/v3/algoliasearch.min
 Then in your JavaScript code you can do:
 
 ```js
-var client = algoliasearch(ApplicationID, Search-Only-API-Key);
-var index = client.initIndex('YourIndexName');
-index.search('something', { hitsPerPage: 10, page: 0 })
+var client = algoliasearch(ApplicationID, Search - Only - API - Key);
+var index = client.initIndex("YourIndexName");
+index
+  .search("something", { hitsPerPage: 10, page: 0 })
   .then(function searchDone(content) {
-    console.log(content)
+    console.log(content);
   })
   .catch(function searchFailure(err) {
     console.error(err);
   });
 ```
 
-**We recently (March 2015) released a new version (V3) of our JavaScript client, if you were using our previous version (V2), [read the migration guide](https://github.com/algolia/algoliasearch-client-javascript/wiki/Migration-guide-from-2.x.x-to-3.x.x)**
+**We recently (March 2015) released a new version (V3) of our JavaScript client, if you were using our previous version (V2), [read the migration guide](https://github.com/algolia/algoliasearch-client-javascript/wiki/Migration-guide-from-2.x.x-to-3.x.x)** -->
+
+--
 
 ## Backend Search
 
-***Notes:*** We recommend the usage of our [JavaScript API Client](https://github.com/algolia/algoliasearch-client-javascript) to perform queries directly from the end-user browser without going through your server.
+<!-- **_Notes:_** We recommend the usage of our [JavaScript API Client](https://github.com/algolia/algoliasearch-client-javascript) to perform queries directly from the end-user browser without going through your server. -->
 
-A search returns ORM-compliant objects reloading them from your database. We recommend the usage of our [JavaScript API Client](https://github.com/algolia/algoliasearch-client-javascript) to perform queries to decrease the overall latency and offload your servers.
+A search retrieves ORM-compliant objects from your database and reloads them. We recommend the usage of our [JavaScript API Client](https://github.com/algolia/algoliasearch-client-javascript) to perform queries to decrease the overall latency and offload your servers.
 
 ```ruby
 hits =  Contact.search("jon doe")
@@ -456,15 +433,11 @@ end
 
 At query time, specify <code>{ aroundLatLng: "37.33, -121.89", aroundRadius: 50000 }</code> as search parameters to restrict the result set to 50KM around San Jose.
 
-
-
 # Options
-
-
 
 ## Auto-indexing & asynchronism
 
-Each time a record is saved, it will be *asynchronously* indexed. On the other hand, each time a record is destroyed, it will be - asynchronously - removed from the index. That means that a network call with the ADD/DELETE operation is sent **synchronously** to the Algolia API but then the engine will **asynchronously** process the operation (so if you do a search just after, the results may not reflect it yet).
+Each time a record is saved, it will be _asynchronously_ indexed. On the other hand, each time a record is destroyed, it will be - asynchronously - removed from the index. That means that a network call with the ADD/DELETE operation is sent **synchronously** to the Algolia API but then the engine will **asynchronously** process the operation (so if you do a search just after, the results may not reflect it yet).
 
 You can disable auto-indexing and auto-removing setting the following options:
 
@@ -648,7 +621,7 @@ class Contact < ActiveRecord::Base
 end
 ```
 
-***Notes:*** As soon as you use such code to define extra attributes, the gem is not anymore able to detect if the attribute has changed (the code uses Rails's `#{attribute}_changed?` method to detect that). As a consequence, your record will be pushed to the API even if its attributes didn't change. You can work-around this behavior creating a `_changed?` method:
+**_Notes:_** As soon as you use such code to define extra attributes, the gem is not anymore able to detect if the attribute has changed (the code uses Rails's `#{attribute}_changed?` method to detect that). As a consequence, your record will be pushed to the API even if its attributes didn't change. You can work-around this behavior creating a `_changed?` method:
 
 ```ruby
 class Contact < ActiveRecord::Base
@@ -876,7 +849,7 @@ end
 
 ```
 
-***Notes:*** This option is not compatible with Ruby 1.8
+**_Notes:_** This option is not compatible with Ruby 1.8
 
 ## Exceptions
 
@@ -950,11 +923,7 @@ class Item < ActiveRecord::Base
 end
 ```
 
-
-
 # Indices
-
-
 
 ## Manual indexing
 
@@ -1018,7 +987,7 @@ index = Contact.index
 ## Primary/replica
 
 You can define replica indices using the <code>add_replica</code> method.
-Use `inherit: true` on the replica block if you want it  to inherit from the primary settings.
+Use `inherit: true` on the replica block if you want it to inherit from the primary settings.
 
 ```ruby
 class Book < ActiveRecord::Base
@@ -1087,7 +1056,7 @@ class Teacher < ActiveRecord::Base
 end
 ```
 
-***Notes:*** If you target a single index from several models, you must never use `MyModel.reindex` and only use `MyModel.reindex!`. The `reindex` method uses a temporary index to perform an atomic reindexing: if you use it, the resulting index will only contain records for the current model because it will not reindex the others.
+**_Notes:_** If you target a single index from several models, you must never use `MyModel.reindex` and only use `MyModel.reindex!`. The `reindex` method uses a temporary index to perform an atomic reindexing: if you use it, the resulting index will only contain records for the current model because it will not reindex the others.
 
 ## Target multiple indices
 
@@ -1132,11 +1101,7 @@ Book.raw_search 'foo bar', index: 'Book_by_editor'
 Book.search 'foo bar', index: 'Book_by_editor'
 ```
 
-
-
 # Testing
-
-
 
 ## Notes
 
@@ -1183,7 +1148,6 @@ describe 'With a mocked client' do
 end
 ```
 
-
 ## ❓ Troubleshooting
 
 Encountering an issue? Before reaching out to support, we recommend heading to our [FAQ](https://www.algolia.com/doc/api-client/troubleshooting/faq/ruby/) where you will find answers for the most common issues and gotchas with the client.
@@ -1191,4 +1155,3 @@ Encountering an issue? Before reaching out to support, we recommend heading to o
 ## Use the Dockerfile
 
 If you want to contribute to this project without installing all its dependencies, you can use our Docker image. Please check our [dedicated guide](DOCKER_README.MD) to learn more.
-

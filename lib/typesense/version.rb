@@ -1,3 +1,3 @@
 module Typesense
-  VERSION = '2.0.0'
+  GEM_VERSION = '0.0.0'
 end
