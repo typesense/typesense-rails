@@ -630,7 +630,7 @@ module Typesense
       end
 
       def typesense_facets
-        @typesense_json['facets']
+        @typesense_json['facet_counts']
       end
 
       private
