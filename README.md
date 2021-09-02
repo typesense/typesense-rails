@@ -44,11 +44,7 @@ This gem makes it simple to link the Typesense API with your preferred ORM. It u
    - [Indexing](#indexing)
    - [Frontend Search (realtime experience)](#frontend-search-realtime-experience)
    - [Backend Search](#backend-search)
-   - [Backend Pagination](#backend-pagination)
-   - [Tags](#tags)
    - [Faceting](#faceting)
-   - [Faceted search](#faceted-search)
-   - [Group by](#group-by)
    - [Geo-Search](#geo-search)
 
 1. **[Options](#options)**
@@ -62,8 +58,6 @@ This gem makes it simple to link the Typesense API with your preferred ORM. It u
    - [Restrict indexing to a subset of your data](#restrict-indexing-to-a-subset-of-your-data)
    - [Sanitizer](#sanitizer)
    - [UTF-8 Encoding](#utf-8-encoding)
-   - [Exceptions](#exceptions)
-   - [Configuration example](#configuration-example)
 
 1. **[Indices](#indices)**
 
@@ -72,16 +66,13 @@ This gem makes it simple to link the Typesense API with your preferred ORM. It u
    - [Reindexing](#reindexing)
    - [Clearing an index](#clearing-an-index)
    - [Using the underlying index](#using-the-underlying-index)
-   - [Primary/replica](#primaryreplica)
    - [Share a single index](#share-a-single-index)
-   - [Target multiple indices](#target-multiple-indices)
 
 1. **[Testing](#testing)**
 
    - [Notes](#notes)
 
-1. **[Troubleshooting](#troubleshooting)**
-   - [Frequently asked questions](#frequently-asked-questions)
+---
 
 # Setup
 
@@ -135,13 +126,15 @@ The gem is compatible with [ActiveRecord](https://github.com/rails/rails/tree/ma
 
 To initiate the indexing operations, this gem extensively uses Rails callbacks. It will not index your modifications if you use methods that bypass the `after_validation`, `before_save`, or `after_commit` callbacks. `update_attribute`, for example, does not do validation checks. Instead, `update_attributes` is used to perform validations when updating.
 
-All methods injected by the `Typesense` module are prefixed with `typesense_`.If the associated short names aren't already defined,the methods are aliased to them.
+All methods injected by the `Typesense` module are prefixed with `typesense_`. If the associated short names aren't already defined,the methods are aliased to them.
 
 ```ruby
 Episode.typesense_reindex! # <=> Episode.reindex!
 
 Episode.typesense_search("jesse","summary") # <=> Episode.search("jesse","summary")
 ```
+
+---
 
 # Usage
 
@@ -193,6 +186,26 @@ class Episode < ApplicationRecord
   end
 end
 ```
+
+To configure your collection schema with field arguments defined [here](https://typesense.org/docs/0.21.0/api/collections.html#create-a-collection), you can do:
+
+```ruby
+class Episode < ApplicationRecord
+  belongs_to :show
+  include Typesense
+
+  typesense  do
+    predefined_fields [
+      { name: 'name', type: 'string' },
+      { name: 'summary', type: 'string' },
+      {name: 'number',type: 'int32'}
+    ]
+    default_sorting_field 'number'
+  end
+end
+```
+
+Be sure to use `reindex` to update your collection schema.
 
 ## Indexing
 
@@ -274,7 +287,7 @@ All [search parameters](https://typesense.org/docs/0.21.0/api/documents.html#sea
 Episode.raw_search("jesse","summary",{"sort_by"=>"number:asc"})
 ```
 
-## Backend Pagination
+<!-- ## Backend Pagination
 
 This gem supports both [will_paginate](https://github.com/mislav/will_paginate) and [kaminari](https://github.com/amatsuda/kaminari) as pagination backend.
 
@@ -296,7 +309,7 @@ Then, as soon as you use the `search` method, the returning results will be a pa
 
 # if using kaminari
 <%= paginate @results %>
-```
+``` -->
 
 ## Faceting
 
@@ -341,6 +354,8 @@ end
  mv = City.create name: 'Mountain View', country: 'No man\'s land', lat: 37.38, lng: -122.08
  results = City.search('*', '', { 'filter_by' => 'location:(37.33, -121.89,50 km)' })
 ```
+
+---
 
 # Options
 
@@ -457,9 +472,7 @@ end
 
 ```
 
----
-
-### Synchronism & testing
+<!-- ### Synchronism & testing
 
 You can force indexing and removing to be synchronous (in that case the gem will call the `wait_task` method to ensure the operation has been taken into account once the method returns) by setting the following option: (this is **NOT** recommended, except for testing purpose)
 
@@ -471,7 +484,7 @@ class Episode < ActiveRecord::Base
     attribute :first_name, :last_name, :email
   end
 end
-```
+``` -->
 
 ## Custom index name
 
@@ -771,6 +784,36 @@ class Episode < ActiveRecord::Base
 end
 ``` -->
 
+---
+
+# Settings
+
+## Synonyms
+
+In addition to the `predefined_fields` and `default_sorting_field` settings, you can also use the following settings to define [synonyms](https://typesense.org/docs/0.21.0/api/synonyms.html#create-or-update-a-synonym) for your attributes.
+
+```ruby
+class Product < ActiveRecord::Base
+  include Typesense
+
+  typesense do
+
+    multi_way_synonyms [
+      { 'phone-synonym' => %w[galaxy samsung samsung_electronics] }
+    ]
+
+    one_way_synonyms [
+      { 'smart-phone-synonym' => { 'root' => 'smartphone',
+                                   'synonyms' => %w[nokia samsung motorola android] } }
+    ]
+  end
+end
+
+# Product.search('galaxy', 'name') would be equivalent to Product.search('samsung', 'name') in case of multi-way synonyms.
+# Product.search('smartphone', 'name') would include all hits for the synonyms defined in case of one-way synonyms.
+```
+
+---
 
 # Indices
 
@@ -831,7 +874,6 @@ index = Episode.index
 #{:collection_name=>"Episode_1630520536", :alias_name=>"Episode"}
 ```
 
-
 ## Share a single index
 
 It is possible to share an index among several models. To do so, make sure you don't have any conflicts with the underlying models' object ids.
@@ -869,6 +911,8 @@ end
 ```
 
 **_Notes:_** If you want to reindex a single index from many models, you must use `MyModel.reindex!`instead of `MyModel.reindex`. The reindex method will delete the collection and the final collection will only contain entries for the current model, as it will not reindex the others.
+
+---
 
 # Testing
 
