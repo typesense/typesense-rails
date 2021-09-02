@@ -58,6 +58,10 @@ This gem makes it simple to link the Typesense API with your preferred ORM. It u
    - [Restrict indexing to a subset of your data](#restrict-indexing-to-a-subset-of-your-data)
    - [Sanitizer](#sanitizer)
    - [UTF-8 Encoding](#utf-8-encoding)
+  
+1. **[Settings](#settings)**
+   
+   - [Synonyms](#synonyms)
 
 1. **[Indices](#indices)**
 
@@ -72,7 +76,7 @@ This gem makes it simple to link the Typesense API with your preferred ORM. It u
 
    - [Notes](#notes)
 
----
+
 
 # Setup
 
@@ -134,7 +138,6 @@ Episode.typesense_reindex! # <=> Episode.reindex!
 Episode.typesense_search("jesse","summary") # <=> Episode.search("jesse","summary")
 ```
 
----
 
 # Usage
 
@@ -784,7 +787,6 @@ class Episode < ActiveRecord::Base
 end
 ``` -->
 
----
 
 # Settings
 
@@ -812,8 +814,6 @@ end
 # Product.search('galaxy', 'name') would be equivalent to Product.search('samsung', 'name') in case of multi-way synonyms.
 # Product.search('smartphone', 'name') would include all hits for the synonyms defined in case of one-way synonyms.
 ```
-
----
 
 # Indices
 
@@ -912,7 +912,6 @@ end
 
 **_Notes:_** If you want to reindex a single index from many models, you must use `MyModel.reindex!`instead of `MyModel.reindex`. The reindex method will delete the collection and the final collection will only contain entries for the current model, as it will not reindex the others.
 
----
 
 # Testing
 
