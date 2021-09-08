@@ -613,6 +613,7 @@ module Typesense
 
     def typesense_raw_search(q, query_by, params = {})
       # typesense_raw_search: JSON output of search.
+      params[:page]=params[:page] ? params[:page].to_i : 1
       collection_obj = typesense_index # index_name)
       search_collection(params.merge({ q: q, query_by: query_by }), collection_obj[:alias_name])
     end
