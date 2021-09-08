@@ -1023,15 +1023,11 @@ describe 'Kaminari' do
   it 'should paginate' do
     pagination = City.search('*', '')
     pagination.total_count.should eq(City.raw_search('*', '')['found'])
-
-    p1 = City.search('*', '', { 'page' => 1, 'per_page' => 1 })
-
+    p1 = City.search('*', '', { page: 1, per_page: 1 })
     p1.size.should eq(1)
     p1[0].should eq(pagination[0])
     p1.total_count.should eq(City.raw_search('*', '')['found'])
-
-    p2 = City.search('*', '', { 'page' => 2, 'per_page' => 1 })
-
+    p2 = City.search('*', '', { page: 2, per_page: 1 })
     p2.size.should eq(1)
     p2[0].should eq(pagination[1])
     p2.total_count.should eq(City.raw_search('*', '')['found'])
