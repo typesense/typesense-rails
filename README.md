@@ -26,7 +26,7 @@
 
 <!--You might be interested in the sample Ruby on Rails application providing a `autocomplete.js`-based auto-completion and `InstantSearch.js`-based instant search results page: [typesense-rails-example](https://github.com/algolia/typesense-rails-example/). -->
 
-This gem makes it simple to link the Typesense API with your preferred ORM. It uses the [typesense-ruby](https://github.com/typesense/typesense-ruby) gem as a foundation. All versions of Rails 3.x, 4.x, and 5.x are supported.
+This gem makes it simple to link the Typesense API with your preferred ORM. It uses the [typesense-ruby](https://github.com/typesense/typesense-ruby) gem as a foundation. All versions of Rails 3.x, 4.x, 5.x and 6.x are supported.
 
 ## API Documentation
 
@@ -44,6 +44,7 @@ This gem makes it simple to link the Typesense API with your preferred ORM. It u
    - [Indexing](#indexing)
    - [Frontend Search (realtime experience)](#frontend-search-realtime-experience)
    - [Backend Search](#backend-search)
+   - [Backend Pagination](#backend-pagination)
    - [Faceting](#faceting)
    - [Geo-Search](#geo-search)
 
@@ -58,9 +59,9 @@ This gem makes it simple to link the Typesense API with your preferred ORM. It u
    - [Restrict indexing to a subset of your data](#restrict-indexing-to-a-subset-of-your-data)
    - [Sanitizer](#sanitizer)
    - [UTF-8 Encoding](#utf-8-encoding)
-  
+
 1. **[Settings](#settings)**
-   
+
    - [Synonyms](#synonyms)
 
 1. **[Indices](#indices)**
@@ -75,8 +76,6 @@ This gem makes it simple to link the Typesense API with your preferred ORM. It u
 1. **[Testing](#testing)**
 
    - [Notes](#notes)
-
-
 
 # Setup
 
@@ -137,7 +136,6 @@ Episode.typesense_reindex! # <=> Episode.reindex!
 
 Episode.typesense_search("jesse","summary") # <=> Episode.search("jesse","summary")
 ```
-
 
 # Usage
 
@@ -290,21 +288,30 @@ All [search parameters](https://typesense.org/docs/0.21.0/api/documents.html#sea
 Episode.raw_search("jesse","summary",{"sort_by"=>"number:asc"})
 ```
 
-<!-- ## Backend Pagination
+## Backend Pagination
 
 This gem supports both [will_paginate](https://github.com/mislav/will_paginate) and [kaminari](https://github.com/amatsuda/kaminari) as pagination backend.
 
-To use <code>:will_paginate</code>, specify the <code>:pagination_backend</code> as follow:
+To use <code>:will_paginate</code>, specify the <code>:pagination_backend</code> like below:
 
 ```ruby
-Typesense.configuration = { application_id: 'YourApplicationID', api_key: 'YourAPIKey', pagination_backend: :will_paginate }
+Typesense.configuration = {
+  nodes: [{
+    host: 'localhost',   # For Typesense Cloud use xxx.a1.typesense.net
+    port: 8108,          # For Typesense Cloud use 443
+    protocol: 'http'         # For Typesense Cloud use https
+  }],
+  api_key: 'xyz',
+  connection_timeout_seconds: 2,
+  pagination_backend: :kaminari
+}
 ```
 
-Then, as soon as you use the `search` method, the returning results will be a paginated set:
+When you use the `search` method, the returning results will be a paginated set:
 
 ```ruby
 # in your controller
-@results = MyModel.search('foo', hitsPerPage: 10)
+@results = Episode.search('jesse', 'summary', { per_page: 5, page: params[:page] })
 
 # in your views
 # if using will_paginate
@@ -312,7 +319,7 @@ Then, as soon as you use the `search` method, the returning results will be a pa
 
 # if using kaminari
 <%= paginate @results %>
-``` -->
+```
 
 ## Faceting
 
@@ -787,7 +794,6 @@ class Episode < ActiveRecord::Base
 end
 ``` -->
 
-
 # Settings
 
 ## Synonyms
@@ -911,7 +917,6 @@ end
 ```
 
 **_Notes:_** If you want to reindex a single index from many models, you must use `MyModel.reindex!`instead of `MyModel.reindex`. The reindex method will delete the collection and the final collection will only contain entries for the current model, as it will not reindex the others.
-
 
 # Testing
 
