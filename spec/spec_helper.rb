@@ -7,31 +7,36 @@ Bundler.setup :test
 $LOAD_PATH.unshift(File.dirname(__FILE__))
 $LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
 
-require 'algoliasearch-rails'
+require 'typesense-rails'
 require 'rspec'
 require 'rails/all'
 
-raise "missing ALGOLIA_APPLICATION_ID or ALGOLIA_API_KEY environment variables" if ENV['ALGOLIA_APPLICATION_ID'].nil? || ENV['ALGOLIA_API_KEY'].nil?
+# raise "missing ALGOLIA_APPLICATION_ID or ALGOLIA_API_KEY environment variables" if ENV['ALGOLIA_APPLICATION_ID'].nil? || ENV['ALGOLIA_API_KEY'].nil?
 
 Thread.current[:algolia_hosts] = nil
 
 RSpec.configure do |c|
   c.mock_with :rspec
-  c.filter_run :focus => true
+  c.filter_run focus: true
   c.run_all_when_everything_filtered = true
   c.formatter = 'documentation'
 
   c.around(:each) do |example|
-    Timeout::timeout(120) {
+    Timeout.timeout(120) do
       example.run
-    }
+    end
   end
 
   # Remove all indexes setup in this run in local or CI
   c.after(:suite) do
     safe_index_list.each do |i|
-      index = AlgoliaSearch.client.init_index(i['name'])
-      index.delete!
+      index = i['name']
+      # Typesense.client.collections.create(
+      #   { "name" => index,
+      #     "fields" => [{ "name" => ".*", "type" => "auto" }] }
+      # )
+      # index.delete!
+      Typesense.client.collections[index].delete
     end
   end
 end
@@ -46,7 +51,7 @@ end
 
 # get a list of safe indexes in local or CI
 def safe_index_list
-  list = AlgoliaSearch.client.list_indexes['items']
-  list = list.select { |index| index["name"].include?(SAFE_INDEX_PREFIX) }
-  list.sort_by { |index| index["primary"] || "" }
+  list = Typesense.client.collections.retrieve
+  list.select { |index| index['name'].include?(SAFE_INDEX_PREFIX) }
+  # list.sort_by { |index| index["primary"] || "" }
 end

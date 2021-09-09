@@ -1,0 +1,6 @@
+pre-push:
+  parallel: true
+  commands:
+    rspec:
+      tags: rspec backend
+      run: bundle exec rspec --fail-fast

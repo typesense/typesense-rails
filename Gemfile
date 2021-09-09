@@ -1,7 +1,8 @@
 source "http://rubygems.org"
 
 gem 'json', '>= 1.5.1'
-gem 'algolia', '< 3.0.0'
+#gem 'algolia', '< 3.0.0'
+gem "typesense", "~> 0.13.0"
 
 if defined?(RUBY_ENGINE) && RUBY_ENGINE == 'rbx'
   gem 'rubysl', '~> 2.0', :platform => :rbx
@@ -30,6 +31,7 @@ group :development do
   gem 'travis'
   gem 'rake', '~> 10.1.0'
   gem 'rdoc'
+  gem "rubocop", "~> 1.19"
 end
 
 group :test, :development do
@@ -37,3 +39,4 @@ group :test, :development do
   gem 'kaminari', '< 1'
 end
 
+gem "lefthook", "~> 0.7.6"
