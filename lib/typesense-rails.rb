@@ -18,7 +18,7 @@ rescue LoadError
 end
 
 require 'logger'
-Rails.logger = ActiveSupport::Logger.new("log/#{Rails.env}.log")
+Rails.logger = ActiveSupport::TaggedLogging.new(ActiveSupport::Logger.new(STDOUT))
 Rails.logger.level = Logger::INFO
 
 module Typesense
