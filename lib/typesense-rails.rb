@@ -458,6 +458,8 @@ module Typesense
       # typesense_reindex!: Reindexes all objects in database(does not remove deleted objects from the collection)
       return if typesense_without_auto_index_scope
 
+      api_response = nil
+
       typesense_configurations.each do |options, settings|
         next if typesense_indexing_disabled?(options)
 
@@ -479,10 +481,10 @@ module Typesense
           end
 
           jsonl_object = documents.join("\n")
-          import_documents(jsonl_object, 'upsert', collection_obj[:alias_name])
+          api_response = import_documents(jsonl_object, 'upsert', collection_obj[:alias_name])
         end
       end
-      nil
+      api_response
     end
 
     def typesense_reindex(batch_size = Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
@@ -546,6 +548,8 @@ module Typesense
       # typesense_index!: Creates a document for the object and retrieves it.
       return if typesense_without_auto_index_scope
 
+      api_response = nil
+
       typesense_configurations.each do |options, settings|
         next if typesense_indexing_disabled?(options)
 
@@ -558,21 +562,21 @@ module Typesense
           object = settings.get_attributes(object).merge!('id' => object_id)
 
           if options[:dirty_values]
-            upsert_document(object, collection_obj[:alias_name], options[:dirty_values])
+            api_response = upsert_document(object, collection_obj[:alias_name], options[:dirty_values])
           else
-            upsert_document(object, collection_obj[:alias_name])
+            api_response = upsert_document(object, collection_obj[:alias_name])
           end
 
         elsif typesense_conditional_index?(options) && !object_id.blank?
-
           begin
-            delete_document(object_id, collection_obj[:collection_name])
+            api_response = delete_document(object_id, collection_obj[:collection_name])
           rescue Typesense::Error::ObjectNotFound => e
             Rails.logger.error "Object not found in index: #{e.message}"
           end
         end
       end
-      nil
+
+      api_response
     end
 
     def typesense_remove_from_index!(object)
