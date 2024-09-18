@@ -1,11 +1,12 @@
 require 'rails'
 
-module AlgoliaSearch
+module Typesense
   class Railtie < Rails::Railtie
     rake_tasks do
-      load "algoliasearch/tasks/algoliasearch.rake"
+      load 'typesense/tasks/typesense.rake'
     end
   end
+
   class Engine < Rails::Engine
   end
 end
