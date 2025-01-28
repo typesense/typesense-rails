@@ -1,8 +1,8 @@
 unless defined? Pagy
-  raise(AlgoliaSearch::BadConfiguration, "AlgoliaSearch: Please add 'pagy' to your Gemfile to use Pagy pagination backend")
+  raise(Typesense::BadConfiguration, "Typesense: Please add 'pagy' to your Gemfile to use Pagy pagination backend")
 end
 
-module AlgoliaSearch
+module Typesense
   module Pagination
     class Pagy
 
