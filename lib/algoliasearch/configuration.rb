@@ -1,11 +1,13 @@
-module AlgoliaSearch
+require "typesense"
+
+module Typesense
   module Configuration
     def initialize
       @client = nil
     end
 
     def configuration
-      @@configuration || raise(NotConfigured, "Please configure AlgoliaSearch. Set AlgoliaSearch.configuration = {application_id: 'YOUR_APPLICATION_ID', api_key: 'YOUR_API_KEY'}")
+      @@configuration || raise(NotConfigured, "Please configure Typesense. Set Typesense.configuration = {api_key: 'YOUR_API_KEY', nodes: [{protocol: 'PROTOCOL', host: 'HOST', port: 'PORT'}]}")
     end
 
     def configuration=(configuration)
@@ -22,21 +24,12 @@ module AlgoliaSearch
     end
 
     def setup_client
-      @client = Algolia::SearchClient.create(
-        @@configuration[:application_id],
-        @@configuration[:api_key],
-        {
-          user_agent_segments: [
-            "Algolia for Rails (#{AlgoliaSearch::VERSION})",
-            "Rails (#{defined?(::Rails::VERSION::STRING) ? ::Rails::VERSION::STRING : 'unknown'})",
-            @@configuration[:append_to_user_agent]
-          ].compact
-        })
+      @client = Typesense::Client.new()
     end
 
     def default_configuration
       {
-        queue_name: 'algoliasearch'
+        queue_name: 'typesense'
       }
     end
   end
