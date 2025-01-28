@@ -1,34 +1,32 @@
-require 'algolia'
+require "typesense"
 
-require 'algoliasearch/version'
-require 'algoliasearch/utilities'
+require "typesense/version"
+require "typesense/utilities"
 
 if defined? Rails
   begin
-    require 'algoliasearch/railtie'
+    require "typesense/railtie"
   rescue LoadError
   end
 end
 
 begin
-  require 'active_job'
+  require "active_job"
 rescue LoadError
   # no queue support, fine
 end
 
-require 'logger'
+require "logger"
 
-module AlgoliaSearch
-
+module Typesense
   class NotConfigured < StandardError; end
   class BadConfiguration < StandardError; end
   class NoBlockGiven < StandardError; end
-  class MixedSlavesAndReplicas < StandardError; end
 
-  autoload :Configuration, 'algoliasearch/configuration'
+  autoload :Configuration, "typesense/configuration"
   extend Configuration
 
-  autoload :Pagination, 'algoliasearch/pagination'
+  autoload :Pagination, "typesense/pagination"
 
   class << self
     attr_reader :included_in
@@ -43,7 +41,6 @@ module AlgoliaSearch
         include InstanceMethods
       end
     end
-
   end
 
   class IndexSettings
