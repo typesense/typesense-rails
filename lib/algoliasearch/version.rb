@@ -1,3 +1,3 @@
-module AlgoliaSearch
-  VERSION = '3.0.1'
+module Typesense
+  GEM_VERSION = '0.0.0'
 end
