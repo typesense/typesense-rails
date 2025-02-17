@@ -1,27 +1,25 @@
-require 'rubygems'
-require 'bundler'
-require 'timeout'
+require "rubygems"
+require "bundler"
+require "timeout"
 
 Bundler.setup :test
 
 $LOAD_PATH.unshift(File.dirname(__FILE__))
-$LOAD_PATH.unshift(File.join(File.dirname(__FILE__), '..', 'lib'))
+$LOAD_PATH.unshift(File.join(File.dirname(__FILE__), "..", "lib"))
 
-require 'algoliasearch-rails'
-require 'rspec'
-require 'rails/all'
+require "typesense-rails"
+require "rspec"
+require "rails/all"
 
-raise "missing ALGOLIA_APPLICATION_ID or ALGOLIA_API_KEY environment variables" if ENV['ALGOLIA_APPLICATION_ID'].nil? || ENV['ALGOLIA_API_KEY'].nil?
+Thread.current[:typesense_hosts] = nil
 
-Thread.current[:algolia_hosts] = nil
-
-GlobalID.app = 'algoiasearch-rails'
+GlobalID.app = "typesense-rails"
 
 RSpec.configure do |c|
   c.mock_with :rspec
   c.filter_run :focus => true
   c.run_all_when_everything_filtered = true
-  c.formatter = 'documentation'
+  c.formatter = "documentation"
 
   c.around(:each) do |example|
     Timeout::timeout(120) {
@@ -33,8 +31,7 @@ RSpec.configure do |c|
   c.after(:suite) do
     safe_index_list.each do |i|
       begin
-        res = AlgoliaSearch.client.delete_index(i.name)
-        AlgoliaSearch.client.wait_for_task(i.name, res.task_id)
+        Typesense.client.collections(i.name).delete()
       rescue
         # fail gracefully
       end
@@ -52,7 +49,7 @@ end
 
 # get a list of safe indexes in local or CI
 def safe_index_list
-  list = AlgoliaSearch.client.list_indices.items
+  list = Typesense.client.collections.retrieve()
   list = list.select { |index| index.name.include?(SAFE_INDEX_PREFIX) }
   list.sort_by { |index| index.primary || "" }
 end
