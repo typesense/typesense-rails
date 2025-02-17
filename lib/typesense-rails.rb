@@ -451,21 +451,21 @@ module Typesense
       end
     end
 
-    def algolia_without_auto_index(&block)
-      self.algolia_without_auto_index_scope = true
+    def typesense_without_auto_index
+      self.typesense_without_auto_index_scope = true
       begin
         yield
       ensure
-        self.algolia_without_auto_index_scope = false
+        self.typesense_without_auto_index_scope = false
       end
     end
 
-    def algolia_without_auto_index_scope=(value)
-      Thread.current["algolia_without_auto_index_scope_for_#{self.model_name}"] = value
+    def typesense_without_auto_index_scope=(value)
+      Thread.current["typesense_without_auto_index_scope_for_#{model_name}"] = value
     end
 
-    def algolia_without_auto_index_scope
-      Thread.current["algolia_without_auto_index_scope_for_#{self.model_name}"]
+    def typesense_without_auto_index_scope
+      Thread.current["typesense_without_auto_index_scope_for_#{model_name}"]
     end
 
     def algolia_reindex!(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE, synchronous = false)
