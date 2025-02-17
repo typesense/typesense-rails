@@ -634,41 +634,43 @@ module Typesense
 
     private
 
-    def algolia_init_raw_answer(json)
-      @algolia_json = json
+    def typesense_init_raw_answer(json)
+      @typesense_json = json
     end
   end
 
-  def algolia_search(q, params = {})
-    if AlgoliaSearch.configuration[:pagination_backend]
-      # kaminari, will_paginate, and pagy start pagination at 1, Algolia starts at 0
-      params[:page] = (params.delete("page") || params.delete(:page)).to_i
-      params[:page] -= 1 if params[:page].to_i > 0
-    end
-    json = algolia_raw_search(q, params)
-    hit_ids = json[:hits].map { |hit| hit[:objectID] }
-    if defined?(::Mongoid::Document) && self.include?(::Mongoid::Document)
-      condition_key = algolia_object_id_method.in
-    else
-      condition_key = algolia_object_id_method
-    end
-    results_by_id = algoliasearch_options[:type].where(condition_key => hit_ids).index_by do |hit|
-      algolia_object_id_of(hit)
-    end
-    results = json[:hits].map do |hit|
-      o = results_by_id[hit[:objectID].to_s]
-      if o
-        o.highlight_result = hit[:_highlightResult]
-        o.snippet_result = hit[:_snippetResult]
-        o
+  def typesense_search(q, query_by, params = {})
+    # typsense_search: Searches and returns matching objects from the database.
+
+    json = typesense_raw_search(q, query_by, params)
+    hit_ids = json["hits"].map { |hit| hit["document"]["id"] }
+
+    condition_key = if defined?(::Mongoid::Document) && include?(::Mongoid::Document)
+        typesense_object_id_method.in
+      else
+        typesense_object_id_method
       end
+
+    results_by_id = typesense_options[:type].where(condition_key => hit_ids).index_by do |hit|
+      typesense_object_id_of(hit)
+    end
+
+    results = json["hits"].map do |hit|
+      o = results_by_id[hit["document"]["id"].to_s]
+      next unless o
+
+      o.highlight_result = hit["highlights"]
+      o.snippet_result = hit["highlights"].map do |highlight|
+        highlight["snippet"]
+      end
+      o
     end.compact
-    # Algolia has a default limit of 1000 retrievable hits
-    total_hits = json[:nbHits].to_i < json[:nbPages].to_i * json[:hitsPerPage].to_i ?
-      json[:nbHits].to_i : json[:nbPages].to_i * json[:hitsPerPage].to_i
-    res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json[:page].to_i + 1, :per_page => json[:hitsPerPage] }))
+
+    total_hits = json["found"]
+    res = Typesense::Pagination.create(results, total_hits,
+                                       typesense_options.merge({ page: json["page"].to_i, per_page: json["request_params"]["per_page"] }))
     res.extend(AdditionalMethods)
-    res.send(:algolia_init_raw_answer, json)
+    res.send(:typesense_init_raw_answer, json)
     res
   end
 
@@ -684,7 +686,7 @@ module Typesense
   end
 
   def typesense_index_name(options = nil)
-    options ||= typesensesearch_options
+    options ||= typesense_options
     name = options[:index_name] || model_name.to_s.gsub("::", "_")
     name = "#{name}_#{Rails.env}" if options[:per_environment]
     name
@@ -763,7 +765,7 @@ module Typesense
   end
 
   def typesense_object_id_method(options = nil)
-    options ||= typesensesearch_options
+    options ||= typesense_options
     options[:id] || options[:object_id] || :id
   end
 
@@ -906,5 +908,66 @@ module Typesense
   def automatic_changed_method_deprecated?
     (defined?(::ActiveRecord) && ActiveRecord::VERSION::MAJOR >= 5 && ActiveRecord::VERSION::MINOR >= 1) ||
       (defined?(::ActiveRecord) && ActiveRecord::VERSION::MAJOR > 5)
+  end
+end
+
+# these are the instance methods included
+module InstanceMethods
+  def self.included(base)
+    base.instance_eval do
+      alias_method :index!, :typesense_index! unless method_defined? :index!
+      alias_method :remove_from_index!, :typesense_remove_from_index! unless method_defined? :remove_from_index!
+    end
+  end
+
+  def typesense_index!
+    self.class.typesense_index!(self)
+  end
+
+  def typesense_remove_from_index!
+    self.class.typesense_remove_from_index!(self)
+  end
+
+  def typesense_enqueue_remove_from_index!
+    if typesense_options[:enqueue]
+      typesense_options[:enqueue].call(self, true) unless self.class.send(:typesense_indexing_disabled?,
+                                                                          typesense_options)
+    else
+      typesense_remove_from_index!
+    end
+  end
+
+  def typesense_enqueue_index!
+    if typesense_options[:enqueue]
+      typesense_options[:enqueue].call(self, false) unless self.class.send(:typesense_indexing_disabled?,
+                                                                           typesense_options)
+    else
+      typesense_index!
+    end
+  end
+
+  private
+
+  def typesense_mark_for_auto_indexing
+    @typesense_auto_indexing = true
+  end
+
+  def typesense_mark_must_reindex
+    # typesense_must_reindex flag is reset after every commit as part. If we must reindex at any point in
+    # a stransaction, keep flag set until it is explicitly unset
+    @typesense_must_reindex ||= if defined?(::Sequel) && is_a?(Sequel::Model)
+        new? || self.class.typesense_must_reindex?(self)
+      else
+        new_record? || self.class.typesense_must_reindex?(self)
+      end
+    true
+  end
+
+  def typesense_perform_index_tasks
+    return if !@typesense_auto_indexing || @typesense_must_reindex == false
+
+    typesense_enqueue_index!
+    remove_instance_variable(:@typesense_auto_indexing) if instance_variable_defined?(:@typesense_auto_indexing)
+    remove_instance_variable(:@typesense_must_reindex) if instance_variable_defined?(:@typesense_must_reindex)
   end
 end
