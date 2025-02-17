@@ -616,4 +616,295 @@ module Typesense
     end
   end
 
+  module AdditionalMethods
+    def self.extended(base)
+      class << base
+        alias_method :raw_answer, :typesense_raw_answer unless method_defined? :raw_answer
+        alias_method :facets, :typesense_facets unless method_defined? :facets
+      end
+    end
+
+    def typesense_raw_answer
+      @typesense_json
+    end
+
+    def typesense_facets
+      @typesense_json["facet_counts"]
+    end
+
+    private
+
+    def algolia_init_raw_answer(json)
+      @algolia_json = json
+    end
+  end
+
+  def algolia_search(q, params = {})
+    if AlgoliaSearch.configuration[:pagination_backend]
+      # kaminari, will_paginate, and pagy start pagination at 1, Algolia starts at 0
+      params[:page] = (params.delete("page") || params.delete(:page)).to_i
+      params[:page] -= 1 if params[:page].to_i > 0
+    end
+    json = algolia_raw_search(q, params)
+    hit_ids = json[:hits].map { |hit| hit[:objectID] }
+    if defined?(::Mongoid::Document) && self.include?(::Mongoid::Document)
+      condition_key = algolia_object_id_method.in
+    else
+      condition_key = algolia_object_id_method
+    end
+    results_by_id = algoliasearch_options[:type].where(condition_key => hit_ids).index_by do |hit|
+      algolia_object_id_of(hit)
+    end
+    results = json[:hits].map do |hit|
+      o = results_by_id[hit[:objectID].to_s]
+      if o
+        o.highlight_result = hit[:_highlightResult]
+        o.snippet_result = hit[:_snippetResult]
+        o
+      end
+    end.compact
+    # Algolia has a default limit of 1000 retrievable hits
+    total_hits = json[:nbHits].to_i < json[:nbPages].to_i * json[:hitsPerPage].to_i ?
+      json[:nbHits].to_i : json[:nbPages].to_i * json[:hitsPerPage].to_i
+    res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json[:page].to_i + 1, :per_page => json[:hitsPerPage] }))
+    res.extend(AdditionalMethods)
+    res.send(:algolia_init_raw_answer, json)
+    res
+  end
+
+  def typesense_index(name = nil)
+    # typesense_index: Creates collection and its alias.
+    if name
+      typesense_configurations.each do |o, s|
+        return typesense_ensure_init(o, s) if o[:index_name].to_s == name.to_s
+      end
+      raise ArgumentError, "Invalid index/replica name: #{name}"
+    end
+    typesense_ensure_init
+  end
+
+  def typesense_index_name(options = nil)
+    options ||= typesensesearch_options
+    name = options[:index_name] || model_name.to_s.gsub("::", "_")
+    name = "#{name}_#{Rails.env}" if options[:per_environment]
+    name
+  end
+
+  def typesense_must_reindex?(object)
+    # use +typesense_dirty?+ method if implemented
+    return object.send(:typesense_dirty?) if object.respond_to?(:typesense_dirty?)
+
+    # Loop over each index to see if a attribute used in records has changed
+    typesense_configurations.each do |options, settings|
+      next if typesense_indexing_disabled?(options)
+      # next if options[:replica]
+      return true if typesense_object_id_changed?(object, options)
+
+      settings.get_attribute_names(object).each do |k|
+        return true if typesense_attribute_changed?(object, k)
+        # return true if !object.respond_to?(changed_method) || object.send(changed_method)
+      end
+      [options[:if], options[:unless]].each do |condition|
+        case condition
+        when nil
+        when String, Symbol
+          return true if typesense_attribute_changed?(object, condition)
+        else
+          # if the :if, :unless condition is a anything else,
+          # we have no idea whether we should reindex or not
+          # let's always reindex then
+          return true
+        end
+      end
+    end
+    # By default, we don't reindex
+    false
+  end
+
+  protected
+
+  def typesense_ensure_init(options = nil, settings = nil, create = true)
+    raise ArgumentError, "No `typesense` block found in your model." if typesense_settings.nil?
+
+    @typesense_indexes ||= {}
+
+    options ||= typesense_options
+    settings ||= typesense_settings
+
+    return @typesense_indexes[settings] if @typesense_indexes[settings] && get_collection(@typesense_indexes[settings][:alias_name])
+
+    alias_name = typesense_index_name(options)
+    collection = get_collection(alias_name)
+
+    if collection
+      collection_name = collection["name"]
+    else
+      collection_name = self.collection_name(options)
+      raise ArgumentError, "#{collection_name} is not found in your model." unless create
+
+      create_collection(collection_name, settings)
+      upsert_alias(collection_name, alias_name)
+    end
+    @typesense_indexes[settings] = { collection_name: collection_name, alias_name: alias_name }
+
+    @typesense_indexes[settings]
+  end
+
+  private
+
+  def typesense_configurations
+    raise ArgumentError, "No `typesense` block found in your model." if typesense_settings.nil?
+
+    if @configurations.nil?
+      @configurations = {}
+      @configurations[typesense_options] = typesense_settings
+    end
+    @configurations
+  end
+
+  def typesense_object_id_method(options = nil)
+    options ||= typesensesearch_options
+    options[:id] || options[:object_id] || :id
+  end
+
+  def typesense_object_id_of(o, options = nil)
+    o.send(typesense_object_id_method(options)).to_s
+  end
+
+  def typesense_object_id_changed?(o, options = nil)
+    changed = typesense_attribute_changed?(o, typesense_object_id_method(options))
+    changed.nil? ? false : changed
+  end
+
+  def typesense_settings_changed?(prev, current)
+    return true if prev.nil?
+
+    current.each do |k, v|
+      prev_v = prev[k.to_s]
+      if v.is_a?(Array) && prev_v.is_a?(Array)
+        # compare array of strings, avoiding symbols VS strings comparison
+        return true if v.map(&:to_s) != prev_v.map(&:to_s)
+      elsif prev_v != v
+        return true
+      end
+    end
+    false
+  end
+
+  def typesense_full_const_get(name)
+    list = name.split("::")
+    list.shift if list.first.blank?
+    obj = Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9 ? Object : self
+    list.each do |x|
+      # This is required because const_get tries to look for constants in the
+      # ancestor chain, but we only want constants that are HERE
+      obj = obj.const_defined?(x) ? obj.const_get(x) : obj.const_missing(x)
+    end
+    obj
+  end
+
+  def typesense_conditional_index?(options = nil)
+    options ||= typesense_options
+    options[:if].present? || options[:unless].present?
+  end
+
+  def typesense_indexable?(object, options = nil)
+    options ||= typesense_options
+    if_passes = options[:if].blank? || typesense_constraint_passes?(object, options[:if])
+    unless_passes = options[:unless].blank? || !typesense_constraint_passes?(object, options[:unless])
+    if_passes && unless_passes
+  end
+
+  def typesense_constraint_passes?(object, constraint)
+    case constraint
+    when Symbol
+      object.send(constraint)
+    when String
+      object.send(constraint.to_sym)
+    when Enumerable
+      # All constraints must pass
+      constraint.all? { |inner_constraint| typesense_constraint_passes?(object, inner_constraint) }
+    else
+      raise ArgumentError, "Unknown constraint type: #{constraint} (#{constraint.class})" unless constraint.respond_to?(:call)
+
+      constraint.call(object)
+    end
+  end
+
+  def typesense_indexing_disabled?(options = nil)
+    options ||= typesense_options
+    constraint = options[:disable_indexing] || options["disable_indexing"]
+    case constraint
+    when nil
+      return false
+    when true, false
+      return constraint
+    when String, Symbol
+      return send(constraint)
+    else
+      return constraint.call if constraint.respond_to?(:call) # Proc
+    end
+    raise ArgumentError, "Unknown constraint type: #{constraint} (#{constraint.class})"
+  end
+
+  def typesense_find_in_batches(batch_size, &block)
+    if (defined?(::ActiveRecord) && ancestors.include?(::ActiveRecord::Base)) || respond_to?(:find_in_batches)
+      find_in_batches(batch_size: batch_size, &block)
+    elsif defined?(::Sequel) && self < Sequel::Model
+      dataset.extension(:pagination).each_page(batch_size, &block)
+    else
+      # don't worry, mongoid has its own underlying cursor/streaming mechanism
+      items = []
+      all.each do |item|
+        items << item
+        if items.length % batch_size.zero?
+          yield items
+          items = []
+        end
+      end
+      yield items unless items.empty?
+    end
+  end
+
+  def typesense_attribute_changed?(object, attr_name)
+    # if one of two method is implemented, we return its result
+    # true/false means whether it has changed or not
+    # +#{attr_name}_changed?+ always defined for automatic attributes but deprecated after Rails 5.2
+    # +will_save_change_to_#{attr_name}?+ should be use instead for Rails 5.2+, also defined for automatic attributes.
+    # If none of the method are defined, it's a dynamic attribute
+
+    method_name = "#{attr_name}_changed?"
+    if object.respond_to?(method_name)
+      # If +#{attr_name}_changed?+ respond we want to see if the method is user defined or if it's automatically
+      # defined by Rails.
+      # If it's user-defined, we call it.
+      # If it's automatic we check ActiveRecord version to see if this method is deprecated
+      # and try to call +will_save_change_to_#{attr_name}?+ instead.
+      # See: https://github.com/typesense/typesense-rails/pull/338
+      # This feature is not compatible with Ruby 1.8
+      # In this case, we always call #{attr_name}_changed?
+      return object.send(method_name) if Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9
+      return object.send(method_name) unless automatic_changed_method?(object, method_name) && automatic_changed_method_deprecated?
+    end
+
+    return object.send("will_save_change_to_#{attr_name}?") if object.respond_to?("will_save_change_to_#{attr_name}?")
+
+    # We don't know if the attribute has changed, so conservatively assume it has
+    true
+  end
+
+  def automatic_changed_method?(object, method_name)
+    unless object.respond_to?(method_name)
+      raise ArgumentError,
+            "Method #{method_name} doesn't exist on #{object.class.name}"
+    end
+
+    file = object.method(method_name).source_location[0]
+    file.end_with?("active_model/attribute_methods.rb")
+  end
+
+  def automatic_changed_method_deprecated?
+    (defined?(::ActiveRecord) && ActiveRecord::VERSION::MAJOR >= 5 && ActiveRecord::VERSION::MINOR >= 1) ||
+      (defined?(::ActiveRecord) && ActiveRecord::VERSION::MAJOR > 5)
+  end
 end
