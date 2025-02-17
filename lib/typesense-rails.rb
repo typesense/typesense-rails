@@ -601,7 +601,7 @@ module Typesense
 
         object_id = algolia_object_id_of(object, options)
         index_name = algolia_index_name(options)
-        algolia_ensure_init(options, settings)
+        typesense_ensure_init(options, settings)
         next if options[:replica]
 
         if algolia_indexable?(object, options)
@@ -627,7 +627,7 @@ module Typesense
       raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
       typesense_configurations.each do |options, settings|
         next if typesense_indexing_disabled?(options)
-        algolia_ensure_init(options, settings)
+        typesense_ensure_init(options, settings)
         index_name = algolia_index_name(options)
 
         next if options[:replica]
@@ -644,7 +644,7 @@ module Typesense
       typesense_configurations.each do |options, settings|
         next if typesense_indexing_disabled?(options) || options[:replica]
 
-        algolia_ensure_init(options, settings)
+        typesense_ensure_init(options, settings)
         index_name = algolia_index_name(options)
         res = AlgoliaSearch.client.clear_objects(index_name)
 
@@ -748,11 +748,11 @@ module Typesense
     def ensure_algolia_index(name = nil)
       if name
         typesense_configurations.each do |o, s|
-          return algolia_ensure_init(o, s) if o[:index_name].to_s == name.to_s
+          return typesense_ensure_init(o, s) if o[:index_name].to_s == name.to_s
         end
         raise ArgumentError.new("Invalid index/replica name: #{name}")
       end
-      algolia_ensure_init
+      typesense_ensure_init
     end
 
     def algolia_index_name(options = nil, index_name = nil)
@@ -792,45 +792,31 @@ module Typesense
 
     protected
 
-    def algolia_ensure_init(options = nil, settings = nil, index_settings_hash = nil)
-      raise ArgumentError.new("No `algoliasearch` block found in your model.") if algoliasearch_settings.nil?
+    def typesense_ensure_init(options = nil, settings = nil, create = true)
+      raise ArgumentError, "No `typesense` block found in your model." if typesensesearch_settings.nil?
 
-      @algolia_indexes_init ||= {}
+      @typesense_indexes ||= {}
 
-      options ||= algoliasearch_options
-      settings ||= algoliasearch_settings
+      options ||= typesensesearch_options
+      settings ||= typesensesearch_settings
 
-      return if @algolia_indexes_init[settings]
+      return @typesense_indexes[settings] if @typesense_indexes[settings] && get_collection(@typesense_indexes[settings][:alias_name])
 
-      index_name = algolia_index_name(options)
+      alias_name = typesense_index_name(options)
+      collection = get_collection(alias_name)
 
-      index_settings_hash ||= settings.to_settings.to_hash
-      index_settings_hash = options[:primary_settings].to_settings.to_hash.merge(index_settings_hash) if options[:inherit]
-      replicas = index_settings_hash.delete(:replicas) || index_settings_hash.delete("replicas")
-      index_settings_hash[:replicas] = replicas unless replicas.nil? || options[:inherit]
+      if collection
+        collection_name = collection["name"]
+      else
+        collection_name = self.collection_name(options)
+        raise ArgumentError, "#{collection_name} is not found in your model." unless create
 
-      options[:check_settings] = true if options[:check_settings].nil?
-
-      current_settings = if options[:check_settings] && !algolia_indexing_disabled?(options)
-          AlgoliaSearch.client.get_settings(index_name, { :getVersion => 1 }).to_hash rescue nil # if the index doesn't exist
-        end
-
-      if !algolia_indexing_disabled?(options) && options[:check_settings] && algoliasearch_settings_changed?(current_settings, index_settings_hash)
-        s = index_settings_hash.map do |k, v|
-          [settings.setting_name(k), v]
-        end.to_h
-
-        synonyms = s.delete("synonyms") || s.delete(:synonyms)
-        unless synonyms.nil? || synonyms.empty?
-          resp = AlgoliaSearch.client.save_synonyms(index_name, synonyms.map { |s| Algolia::Search::SynonymHit.new({ object_id: s.join("-"), synonyms: s, type: "synonym" }) })
-          AlgoliaSearch.client.wait_for_task(index_name, resp.task_id) if options[:synchronous]
-        end
-
-        resp = AlgoliaSearch.client.set_settings(index_name, Algolia::Search::IndexSettings.new(s))
-        AlgoliaSearch.client.wait_for_task(index_name, resp.task_id) if options[:synchronous]
+        create_collection(collection_name, settings)
+        upsert_alias(collection_name, alias_name)
       end
+      @typesense_indexes[settings] = { collection_name: collection_name, alias_name: alias_name }
 
-      return
+      @typesense_indexes[settings]
     end
 
     private
@@ -892,14 +878,14 @@ module Typesense
       options[:if].present? || options[:unless].present?
     end
 
-    def algolia_indexable?(object, options = nil)
-      options ||= algoliasearch_options
-      if_passes = options[:if].blank? || algolia_constraint_passes?(object, options[:if])
-      unless_passes = options[:unless].blank? || !algolia_constraint_passes?(object, options[:unless])
+    def typesense_indexable?(object, options = nil)
+      options ||= typesense_options
+      if_passes = options[:if].blank? || typesense_constraint_passes?(object, options[:if])
+      unless_passes = options[:unless].blank? || !typesense_constraint_passes?(object, options[:unless])
       if_passes && unless_passes
     end
 
-    def algolia_constraint_passes?(object, constraint)
+    def typesense_constraint_passes?(object, constraint)
       case constraint
       when Symbol
         object.send(constraint)
