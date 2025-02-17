@@ -503,8 +503,8 @@ module Typesense
     # reindex whole database using a extra temporary index + move operation
     def algolia_reindex(batch_size = AlgoliaSearch::IndexSettings::DEFAULT_BATCH_SIZE, synchronous = false)
       return if algolia_without_auto_index_scope
-      algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options)
+      typesense_configurations.each do |options, settings|
+        next if typesense_indexing_disabled?(options)
         next if options[:replica]
 
         algolia_ensure_init(options, settings)
@@ -535,7 +535,7 @@ module Typesense
           algolia_ensure_init(tmp_options, tmp_settings, master_settings)
         end
 
-        algolia_find_in_batches(batch_size) do |group|
+        typesense_find_in_batches(batch_size) do |group|
           if algolia_conditional_index?(options)
             # select only indexable objects
             group = group.select { |o| algolia_indexable?(o, tmp_options) }
@@ -555,7 +555,7 @@ module Typesense
     end
 
     def algolia_set_settings(synchronous = false)
-      algolia_configurations.each do |options, settings|
+      typesense_configurations.each do |options, settings|
         if options[:primary_settings] && options[:inherit]
           primary = options[:primary_settings].to_settings.to_hash
           primary.delete :replicas
@@ -581,8 +581,8 @@ module Typesense
     end
 
     def algolia_index_objects(objects, synchronous = false)
-      algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options)
+      typesense_configurations.each do |options, settings|
+        next if typesense_indexing_disabled?(options)
         algolia_ensure_init(options, settings)
         index_name = algolia_index_name(options)
 
@@ -596,8 +596,8 @@ module Typesense
 
     def algolia_index!(object, synchronous = false)
       return if algolia_without_auto_index_scope
-      algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options)
+      typesense_configurations.each do |options, settings|
+        next if typesense_indexing_disabled?(options)
 
         object_id = algolia_object_id_of(object, options)
         index_name = algolia_index_name(options)
@@ -625,8 +625,8 @@ module Typesense
       return if algolia_without_auto_index_scope
       object_id = algolia_object_id_of(object)
       raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
-      algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options)
+      typesense_configurations.each do |options, settings|
+        next if typesense_indexing_disabled?(options)
         algolia_ensure_init(options, settings)
         index_name = algolia_index_name(options)
 
@@ -641,8 +641,8 @@ module Typesense
     end
 
     def algolia_clear_index!(synchronous = false)
-      algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options) || options[:replica]
+      typesense_configurations.each do |options, settings|
+        next if typesense_indexing_disabled?(options) || options[:replica]
 
         algolia_ensure_init(options, settings)
         index_name = algolia_index_name(options)
@@ -663,7 +663,7 @@ module Typesense
 
       opts = algoliasearch_options
       unless index_name_base.nil?
-        algolia_configurations.each do |o, s|
+        typesense_configurations.each do |o, s|
           if o[:index_name].to_s == index_name_base.to_s
             opts = o
             ensure_algolia_index(index_name_base)
@@ -747,7 +747,7 @@ module Typesense
 
     def ensure_algolia_index(name = nil)
       if name
-        algolia_configurations.each do |o, s|
+        typesense_configurations.each do |o, s|
           return algolia_ensure_init(o, s) if o[:index_name].to_s == name.to_s
         end
         raise ArgumentError.new("Invalid index/replica name: #{name}")
@@ -766,8 +766,8 @@ module Typesense
       # use +algolia_dirty?+ method if implemented
       return object.send(:algolia_dirty?) if (object.respond_to?(:algolia_dirty?))
       # Loop over each index to see if a attribute used in records has changed
-      algolia_configurations.each do |options, settings|
-        next if algolia_indexing_disabled?(options)
+      typesense_configurations.each do |options, settings|
+        next if typesense_indexing_disabled?(options)
         next if options[:replica]
         return true if algolia_object_id_changed?(object, options)
         settings.get_attribute_names(object).each do |k|
@@ -835,20 +835,12 @@ module Typesense
 
     private
 
-    def algolia_configurations
-      raise ArgumentError.new("No `algoliasearch` block found in your model.") if algoliasearch_settings.nil?
+    def typesense_configurations
+      raise ArgumentError, "No `typesense` block found in your model." if typesensesearch_settings.nil?
+
       if @configurations.nil?
         @configurations = {}
-        @configurations[algoliasearch_options] = algoliasearch_settings
-        algoliasearch_settings.additional_indexes.each do |k, v|
-          @configurations[k] = v
-
-          if v.additional_indexes.any?
-            v.additional_indexes.each do |options, index|
-              @configurations[options] = index
-            end
-          end
-        end
+        @configurations[typesensesearch_options] = typesensesearch_settings
       end
       @configurations
     end
