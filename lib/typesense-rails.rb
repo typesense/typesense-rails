@@ -48,36 +48,14 @@ module Typesense
 
     # AlgoliaSearch settings
     OPTIONS = [
-      # Attributes
-      :searchableAttributes, :attributesForFaceting, :unretrievableAttributes, :attributesToRetrieve,
-      # Ranking
-      :ranking, :customRanking, :relevancyStrictness, # Replicas are handled via `add_replica`
-      # Faceting
-      :maxValuesPerFacet, :sortFacetValuesBy,
-      # Highlighting / Snippeting
-      :attributesToHighlight, :attributesToSnippet, :highlightPreTag, :highlightPostTag,
-      :snippetEllipsisText, :restrictHighlightAndSnippetArrays,
-      # Pagination
-      :hitsPerPage, :paginationLimitedTo,
-      # Typo
-      :minWordSizefor1Typo, :minWordSizefor2Typos, :typoTolerance, :allowTyposOnNumericTokens,
-      :disableTypoToleranceOnAttributes, :disableTypoToleranceOnWords, :separatorsToIndex,
-      # Language
-      :ignorePlurals, :removeStopWords, :camelCaseAttributes, :decompoundedAttributes,
-      :keepDiacriticsOnCharacters, :queryLanguages, :indexLanguages,
-      # Query Rules
-      :enableRules,
-      # Query Strategy
-      :queryType, :removeWordsIfNoResults, :advancedSyntax, :optionalWords,
-      :disablePrefixOnAttributes, :disableExactOnAttributes, :exactOnSingleWordQuery, :alternativesAsExact,
-      # Performance
-      :numericAttributesForFiltering, :allowCompressionOfIntegerArray,
-      # Advanced
-      :attributeForDistinct, :distinct, :replaceSynonymsInHighlight, :minProximity, :responseFields,
-      :maxFacetHits,
-
-      # Rails-specific
-      :synonyms, :placeholders, :altCorrections,
+      :multi_way_synonyms,
+      :one_way_synonyms,
+      :predefined_fields,
+      :default_sorting_field,
+      :symbols_to_index,
+      :token_separators,
+      :enable_nested_fields,
+      :metadata,
     ]
     OPTIONS.each do |k|
       define_method k do |v|
@@ -95,23 +73,23 @@ module Typesense
     end
 
     def attribute(*names, &block)
-      raise ArgumentError.new('Cannot pass multiple attribute names if block given') if block_given? and names.length > 1
-      raise ArgumentError.new('Cannot specify additional attributes on a replica index') if @options[:replica]
+      raise ArgumentError.new("Cannot pass multiple attribute names if block given") if block_given? and names.length > 1
       @attributes ||= {}
       names.flatten.each do |name|
         @attributes[name.to_s] = block_given? ? Proc.new { |o| o.instance_eval(&block) } : Proc.new { |o| o.send(name) }
       end
     end
+
     alias :attributes :attribute
 
     def add_attribute(*names, &block)
-      raise ArgumentError.new('Cannot pass multiple attribute names if block given') if block_given? and names.length > 1
-      raise ArgumentError.new('Cannot specify additional attributes on a replica index') if @options[:replica]
+      raise ArgumentError.new("Cannot pass multiple attribute names if block given") if block_given? and names.length > 1
       @additional_attributes ||= {}
       names.each do |name|
         @additional_attributes[name.to_s] = block_given? ? Proc.new { |o| o.instance_eval(&block) } : Proc.new { |o| o.send(name) }
       end
     end
+
     alias :add_attributes :add_attribute
 
     def is_mongoid?(object)
@@ -145,7 +123,7 @@ module Typesense
 
     def attributes_to_hash(attributes, object)
       if attributes
-        Hash[attributes.map { |name, value| [name.to_s, value.call(object) ] }]
+        Hash[attributes.map { |name, value| [name.to_s, value.call(object)] }]
       else
         {}
       end
@@ -198,7 +176,7 @@ module Typesense
     def encode_attributes(v)
       case v
       when String
-        v.dup.force_encoding('utf-8')
+        v.dup.force_encoding("utf-8")
       when Hash
         v.each { |key, value| v[key] = encode_attributes(value) }
       when Array
@@ -208,80 +186,8 @@ module Typesense
       end
     end
 
-    def geoloc(lat_attr = nil, lng_attr = nil, &block)
-      raise ArgumentError.new('Cannot specify additional attributes on a replica index') if @options[:replica]
-      add_attribute :_geoloc do |o|
-        block_given? ? o.instance_eval(&block) : { :lat => o.send(lat_attr).to_f, :lng => o.send(lng_attr).to_f }
-      end
-    end
-
-    def tags(*args, &block)
-      raise ArgumentError.new('Cannot specify additional attributes on a replica index') if @options[:replica]
-      add_attribute :_tags do |o|
-        v = block_given? ? o.instance_eval(&block) : args
-        v.is_a?(Array) ? v : [v]
-      end
-    end
-
     def get_setting(name)
       instance_variable_get("@#{name}")
-    end
-
-    def to_settings
-      settings = to_hash
-
-      # Remove the synonyms setting since those need to be set separately
-      settings.delete(:synonyms)
-      settings.delete("synonyms")
-
-      Algolia::Search::IndexSettings.new(settings)
-    end
-
-    def to_hash
-      settings = {}
-      OPTIONS.each do |k|
-        v = get_setting(k)
-        settings[setting_name(k)] = v if !v.nil?
-      end
-
-      if !@options[:replica]
-        settings[:replicas] = additional_indexes.select { |opts, s| opts[:replica] }.map do |opts, s|
-          name = opts[:index_name]
-          name = "#{name}_#{Rails.env.to_s}" if opts[:per_environment]
-          name = "virtual(#{name})" if opts[:virtual]
-          name
-        end
-        settings.delete(:replicas) if settings[:replicas].empty?
-      end
-
-      settings
-    end
-
-    def setting_name(name)
-      name.to_s.gsub(/::/, '/').
-          gsub(/([A-Z]+)([A-Z][a-z])/,'\1_\2').
-          gsub(/([a-z\d])([A-Z])/,'\1_\2').
-          tr("-", "_").
-          downcase
-    end
-
-    def add_index(index_name, options = {}, &block)
-      raise ArgumentError.new('Cannot specify additional index on a replica index') if @options[:replica]
-      raise ArgumentError.new('No block given') if !block_given?
-      raise ArgumentError.new('Options auto_index and auto_remove cannot be set on nested indexes') if options[:auto_index] || options[:auto_remove]
-      @additional_indexes ||= {}
-      options[:index_name] = index_name
-      @additional_indexes[options] = IndexSettings.new(options, &block)
-    end
-
-    def add_replica(index_name, options = {}, &block)
-      raise ArgumentError.new('Cannot specify additional replicas on a replica index') if @options[:replica]
-      raise ArgumentError.new('No block given') if !block_given?
-      add_index(index_name, options.merge({ :replica => true, :primary_settings => self }), &block)
-    end
-
-    def additional_indexes
-      @additional_indexes || {}
     end
   end
 
@@ -290,14 +196,13 @@ module Typesense
     # lazy load the ActiveJob class to ensure the
     # queue is initialized before using it
     # see https://github.com/algolia/algoliasearch-rails/issues/69
-    autoload :AlgoliaJob, 'algoliasearch/algolia_job'
+    autoload :TypesenseJob, "typesense/typesense_job"
   end
 
   # these are the class methods added when AlgoliaSearch is included
   module ClassMethods
-
     def self.extended(base)
-      class <<base
+      class << base
         alias_method :without_auto_index, :algolia_without_auto_index unless method_defined? :without_auto_index
         alias_method :reindex!, :algolia_reindex! unless method_defined? :reindex!
         alias_method :reindex, :algolia_reindex unless method_defined? :reindex
@@ -339,16 +244,16 @@ module Typesense
       if options[:enqueue]
         raise ArgumentError.new("Cannot use a enqueue if the `synchronous` option if set") if options[:synchronous]
         proc = if options[:enqueue] == true
-          Proc.new do |record, remove|
-            AlgoliaJob.perform_later(record, remove ? 'algolia_remove_from_index!' : 'algolia_index!')
+            Proc.new do |record, remove|
+              AlgoliaJob.perform_later(record, remove ? "algolia_remove_from_index!" : "algolia_index!")
+            end
+          elsif options[:enqueue].respond_to?(:call)
+            options[:enqueue]
+          elsif options[:enqueue].is_a?(Symbol)
+            Proc.new { |record, remove| self.send(options[:enqueue], record, remove) }
+          else
+            raise ArgumentError.new("Invalid `enqueue` option: #{options[:enqueue]}")
           end
-        elsif options[:enqueue].respond_to?(:call)
-          options[:enqueue]
-        elsif options[:enqueue].is_a?(Symbol)
-          Proc.new { |record, remove| self.send(options[:enqueue], record, remove) }
-        else
-          raise ArgumentError.new("Invalid `enqueue` option: #{options[:enqueue]}")
-        end
         algoliasearch_options[:enqueue] = Proc.new do |record, remove|
           proc.call(record, remove) unless algolia_without_auto_index_scope
         end
@@ -372,7 +277,7 @@ module Typesense
             end
 
             sequel_version = Gem::Version.new(Sequel.version)
-            if sequel_version >= Gem::Version.new('4.0.0') && sequel_version < Gem::Version.new('5.0.0')
+            if sequel_version >= Gem::Version.new("4.0.0") && sequel_version < Gem::Version.new("5.0.0")
               copy_after_commit = instance_method(:after_commit)
               define_method(:after_commit) do |*args|
                 super(*args)
@@ -456,7 +361,7 @@ module Typesense
             unless attributes.class == Hash
               attributes = attributes.to_hash
             end
-            attributes.merge 'objectID' => algolia_object_id_of(o, options)
+            attributes.merge "objectID" => algolia_object_id_of(o, options)
           end
           save_tasks = AlgoliaSearch.client.save_objects(index_name, objects)
           last_task = save_tasks.present? ? save_tasks.last.task_id : last_task
@@ -483,7 +388,7 @@ module Typesense
 
         # remove the replicas of the temporary index
         master_settings.delete :replicas
-        master_settings.delete 'replicas'
+        master_settings.delete "replicas"
 
         # init temporary index
         tmp_index_name = "#{index_name}.tmp"
@@ -506,7 +411,7 @@ module Typesense
             # select only indexable objects
             group = group.select { |o| algolia_indexable?(o, tmp_options) }
           end
-          objects = group.map { |o| tmp_settings.get_attributes(o).merge 'objectID' => algolia_object_id_of(o, tmp_options) }
+          objects = group.map { |o| tmp_settings.get_attributes(o).merge "objectID" => algolia_object_id_of(o, tmp_options) }
 
           AlgoliaSearch.client.save_objects(tmp_index_name, objects)
         end
@@ -525,7 +430,7 @@ module Typesense
         if options[:primary_settings] && options[:inherit]
           primary = options[:primary_settings].to_settings.to_hash
           primary.delete :replicas
-          primary.delete 'replicas'
+          primary.delete "replicas"
           final_settings = primary.merge(settings.to_settings.to_hash)
         else
           final_settings = settings.to_settings.to_hash
@@ -537,7 +442,7 @@ module Typesense
 
         synonyms = s.delete("synonyms") || s.delete(:synonyms)
         unless synonyms.nil? || synonyms.empty?
-          resp = AlgoliaSearch.client.save_synonyms(index_name,synonyms.map {|s| Algolia::Search::SynonymHit.new({object_id: s.join("-"), synonyms: s, type: "synonym"}) } )
+          resp = AlgoliaSearch.client.save_synonyms(index_name, synonyms.map { |s| Algolia::Search::SynonymHit.new({ object_id: s.join("-"), synonyms: s, type: "synonym" }) })
           AlgoliaSearch.client.wait_for_task(index_name, resp.task_id) if synchronous || options[:synchronous]
         end
 
@@ -553,7 +458,7 @@ module Typesense
         index_name = algolia_index_name(options)
 
         next if options[:replica]
-        tasks = AlgoliaSearch.client.save_objects(index_name, objects.map { |o| settings.get_attributes(o).merge 'objectID' => algolia_object_id_of(o, options) })
+        tasks = AlgoliaSearch.client.save_objects(index_name, objects.map { |o| settings.get_attributes(o).merge "objectID" => algolia_object_id_of(o, options) })
         tasks.each do |task|
           AlgoliaSearch.client.wait_for_task(index_name, task.task_id) if synchronous || options[:synchronous]
         end
@@ -572,7 +477,7 @@ module Typesense
 
         if algolia_indexable?(object, options)
           raise ArgumentError.new("Cannot index a record with a blank objectID") if object_id.blank?
-          resp = AlgoliaSearch.client.save_object(index_name, settings.get_attributes(object).merge({ 'objectID' => algolia_object_id_of(object, options) }))
+          resp = AlgoliaSearch.client.save_object(index_name, settings.get_attributes(object).merge({ "objectID" => algolia_object_id_of(object, options) }))
           if synchronous || options[:synchronous]
             AlgoliaSearch.client.wait_for_task(index_name, resp.task_id)
           end
@@ -621,12 +526,11 @@ module Typesense
       nil
     end
 
-
     def algolia_raw_search(q, params = {})
       index_name_base = params.delete(:index) ||
-                   params.delete('index') ||
-                   params.delete(:replica) ||
-                   params.delete('replica')
+                        params.delete("index") ||
+                        params.delete(:replica) ||
+                        params.delete("replica")
 
       opts = algoliasearch_options
       unless index_name_base.nil?
@@ -639,12 +543,12 @@ module Typesense
       end
 
       index_name = algolia_index_name(opts, index_name_base)
-      AlgoliaSearch.client.search_single_index(index_name,Hash[params.to_h.map { |k,v| [k.to_s, v.to_s] }].merge({query: q})).to_hash
+      AlgoliaSearch.client.search_single_index(index_name, Hash[params.to_h.map { |k, v| [k.to_s, v.to_s] }].merge({ query: q })).to_hash
     end
 
     module AdditionalMethods
       def self.extended(base)
-        class <<base
+        class << base
           alias_method :raw_answer, :algolia_raw_answer unless method_defined? :raw_answer
           alias_method :facets, :algolia_facets unless method_defined? :facets
         end
@@ -659,6 +563,7 @@ module Typesense
       end
 
       private
+
       def algolia_init_raw_answer(json)
         @algolia_json = json
       end
@@ -667,7 +572,7 @@ module Typesense
     def algolia_search(q, params = {})
       if AlgoliaSearch.configuration[:pagination_backend]
         # kaminari, will_paginate, and pagy start pagination at 1, Algolia starts at 0
-        params[:page] = (params.delete('page') || params.delete(:page)).to_i
+        params[:page] = (params.delete("page") || params.delete(:page)).to_i
         params[:page] -= 1 if params[:page].to_i > 0
       end
       json = algolia_raw_search(q, params)
@@ -690,7 +595,7 @@ module Typesense
       end.compact
       # Algolia has a default limit of 1000 retrievable hits
       total_hits = json[:nbHits].to_i < json[:nbPages].to_i * json[:hitsPerPage].to_i ?
-        json[:nbHits].to_i: json[:nbPages].to_i * json[:hitsPerPage].to_i
+        json[:nbHits].to_i : json[:nbPages].to_i * json[:hitsPerPage].to_i
       res = AlgoliaSearch::Pagination.create(results, total_hits, algoliasearch_options.merge({ :page => json[:page].to_i + 1, :per_page => json[:hitsPerPage] }))
       res.extend(AdditionalMethods)
       res.send(:algolia_init_raw_answer, json)
@@ -699,11 +604,11 @@ module Typesense
 
     def algolia_search_for_facet_values(facet, text, params = {})
       index_name = params.delete(:index) ||
-                   params.delete('index') ||
+                   params.delete("index") ||
                    params.delete(:replica) ||
-                   params.delete('replicas')
+                   params.delete("replicas")
       index_name ||= algolia_index_name(algoliasearch_options)
-      req = Algolia::Search::SearchForFacetValuesRequest.new({facet_query: text, params: params.to_query})
+      req = Algolia::Search::SearchForFacetValuesRequest.new({ facet_query: text, params: params.to_query })
 
       AlgoliaSearch.client.search_for_facet_values(index_name, facet, req).facet_hits
     end
@@ -723,7 +628,7 @@ module Typesense
 
     def algolia_index_name(options = nil, index_name = nil)
       options ||= algoliasearch_options
-      name = index_name || options[:index_name] || model_name.to_s.gsub('::', '_')
+      name = index_name || options[:index_name] || model_name.to_s.gsub("::", "_")
       name = "#{name}_#{Rails.env.to_s}" if options[:per_environment]
       name
     end
@@ -759,7 +664,7 @@ module Typesense
     protected
 
     def algolia_ensure_init(options = nil, settings = nil, index_settings_hash = nil)
-      raise ArgumentError.new('No `algoliasearch` block found in your model.') if algoliasearch_settings.nil?
+      raise ArgumentError.new("No `algoliasearch` block found in your model.") if algoliasearch_settings.nil?
 
       @algolia_indexes_init ||= {}
 
@@ -770,17 +675,16 @@ module Typesense
 
       index_name = algolia_index_name(options)
 
-
       index_settings_hash ||= settings.to_settings.to_hash
       index_settings_hash = options[:primary_settings].to_settings.to_hash.merge(index_settings_hash) if options[:inherit]
-      replicas = index_settings_hash.delete(:replicas) || index_settings_hash.delete('replicas')
+      replicas = index_settings_hash.delete(:replicas) || index_settings_hash.delete("replicas")
       index_settings_hash[:replicas] = replicas unless replicas.nil? || options[:inherit]
 
       options[:check_settings] = true if options[:check_settings].nil?
 
       current_settings = if options[:check_settings] && !algolia_indexing_disabled?(options)
-                           AlgoliaSearch.client.get_settings(index_name, {:getVersion => 1}).to_hash rescue nil # if the index doesn't exist
-                         end
+          AlgoliaSearch.client.get_settings(index_name, { :getVersion => 1 }).to_hash rescue nil # if the index doesn't exist
+        end
 
       if !algolia_indexing_disabled?(options) && options[:check_settings] && algoliasearch_settings_changed?(current_settings, index_settings_hash)
         s = index_settings_hash.map do |k, v|
@@ -789,7 +693,7 @@ module Typesense
 
         synonyms = s.delete("synonyms") || s.delete(:synonyms)
         unless synonyms.nil? || synonyms.empty?
-          resp = AlgoliaSearch.client.save_synonyms(index_name,synonyms.map {|s| Algolia::Search::SynonymHit.new({object_id: s.join("-"), synonyms: s, type: "synonym"}) } )
+          resp = AlgoliaSearch.client.save_synonyms(index_name, synonyms.map { |s| Algolia::Search::SynonymHit.new({ object_id: s.join("-"), synonyms: s, type: "synonym" }) })
           AlgoliaSearch.client.wait_for_task(index_name, resp.task_id) if options[:synchronous]
         end
 
@@ -803,11 +707,11 @@ module Typesense
     private
 
     def algolia_configurations
-      raise ArgumentError.new('No `algoliasearch` block found in your model.') if algoliasearch_settings.nil?
+      raise ArgumentError.new("No `algoliasearch` block found in your model.") if algoliasearch_settings.nil?
       if @configurations.nil?
         @configurations = {}
         @configurations[algoliasearch_options] = algoliasearch_settings
-        algoliasearch_settings.additional_indexes.each do |k,v|
+        algoliasearch_settings.additional_indexes.each do |k, v|
           @configurations[k] = v
 
           if v.additional_indexes.any?
@@ -851,7 +755,7 @@ module Typesense
     end
 
     def algolia_full_const_get(name)
-      list = name.split('::')
+      list = name.split("::")
       list.shift if list.first.blank?
       obj = Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9 ? Object : self
       list.each do |x|
@@ -894,7 +798,7 @@ module Typesense
 
     def algolia_indexing_disabled?(options = nil)
       options ||= algoliasearch_options
-      constraint = options[:disable_indexing] || options['disable_indexing']
+      constraint = options[:disable_indexing] || options["disable_indexing"]
       case constraint
       when nil
         return false
@@ -968,13 +872,12 @@ module Typesense
 
     def automatic_changed_method_deprecated?
       (defined?(::ActiveRecord) && ActiveRecord::VERSION::MAJOR >= 5 && ActiveRecord::VERSION::MINOR >= 1) ||
-          (defined?(::ActiveRecord) && ActiveRecord::VERSION::MAJOR > 5)
+        (defined?(::ActiveRecord) && ActiveRecord::VERSION::MAJOR > 5)
     end
   end
 
   # these are the instance methods included
   module InstanceMethods
-
     def self.included(base)
       base.instance_eval do
         alias_method :index!, :algolia_index! unless method_defined? :index!
@@ -1023,12 +926,11 @@ module Typesense
     def algolia_mark_must_reindex
       # algolia_must_reindex flag is reset after every commit as part. If we must reindex at any point in
       # a stransaction, keep flag set until it is explicitly unset
-      @algolia_must_reindex ||=
-       if defined?(::Sequel) && defined?(::Sequel::Model) && is_a?(Sequel::Model)
-         new? || self.class.algolia_must_reindex?(self)
-       else
-         new_record? || self.class.algolia_must_reindex?(self)
-       end
+      @algolia_must_reindex ||= if defined?(::Sequel) && defined?(::Sequel::Model) && is_a?(Sequel::Model)
+          new? || self.class.algolia_must_reindex?(self)
+        else
+          new_record? || self.class.algolia_must_reindex?(self)
+        end
       true
     end
 
