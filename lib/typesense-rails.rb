@@ -195,27 +195,26 @@ module Typesense
   if defined?(::ActiveJob::Base)
     # lazy load the ActiveJob class to ensure the
     # queue is initialized before using it
-    # see https://github.com/algolia/algoliasearch-rails/issues/69
     autoload :TypesenseJob, "typesense/typesense_job"
   end
 
-  # these are the class methods added when AlgoliaSearch is included
+  # these are the class methods added when Typesense is included
   module ClassMethods
     def self.extended(base)
       class << base
-        alias_method :without_auto_index, :algolia_without_auto_index unless method_defined? :without_auto_index
-        alias_method :reindex!, :algolia_reindex! unless method_defined? :reindex!
-        alias_method :reindex, :algolia_reindex unless method_defined? :reindex
-        alias_method :index_objects, :algolia_index_objects unless method_defined? :index_objects
-        alias_method :index!, :algolia_index! unless method_defined? :index!
-        alias_method :remove_from_index!, :algolia_remove_from_index! unless method_defined? :remove_from_index!
-        alias_method :clear_index!, :algolia_clear_index! unless method_defined? :clear_index!
-        alias_method :search, :algolia_search unless method_defined? :search
-        alias_method :raw_search, :algolia_raw_search unless method_defined? :raw_search
-        alias_method :search_facet, :algolia_search_facet unless method_defined? :search_facet
-        alias_method :search_for_facet_values, :algolia_search_for_facet_values unless method_defined? :search_for_facet_values
-        alias_method :index_name, :algolia_index_name unless method_defined? :index_name
-        alias_method :must_reindex?, :algolia_must_reindex? unless method_defined? :must_reindex?
+        alias_method :without_auto_index, :typesense_without_auto_index unless method_defined? :without_auto_index
+        alias_method :reindex!, :typesense_reindex! unless method_defined? :reindex!
+        alias_method :reindex, :typesense_reindex unless method_defined? :reindex
+        alias_method :index_objects, :typesense_index_objects unless method_defined? :index_objects
+        alias_method :index!, :typesense_index! unless method_defined? :index!
+        alias_method :remove_from_index!, :typesense_remove_from_index! unless method_defined? :remove_from_index!
+        alias_method :clear_index!, :typesense_clear_index! unless method_defined? :clear_index!
+        alias_method :search, :typesense_search unless method_defined? :search
+        alias_method :raw_search, :typesense_raw_search unless method_defined? :raw_search
+        alias_method :search_facet, :typesense_search_facet unless method_defined? :search_facet
+        alias_method :search_for_facet_values, :typesense_search_for_facet_values unless method_defined? :search_for_facet_values
+        alias_method :index_name, :typesense_index_name unless method_defined? :index_name
+        alias_method :must_reindex?, :typesense_must_reindex? unless method_defined? :must_reindex?
       end
 
       base.cattr_accessor :algoliasearch_options, :algoliasearch_settings
