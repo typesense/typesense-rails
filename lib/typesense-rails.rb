@@ -211,20 +211,57 @@ module Typesense
         alias_method :clear_index!, :typesense_clear_index! unless method_defined? :clear_index!
         alias_method :search, :typesense_search unless method_defined? :search
         alias_method :raw_search, :typesense_raw_search unless method_defined? :raw_search
-        alias_method :search_facet, :typesense_search_facet unless method_defined? :search_facet
-        alias_method :search_for_facet_values, :typesense_search_for_facet_values unless method_defined? :search_for_facet_values
+        alias_method :index, :typesense_index unless method_defined? :index
         alias_method :index_name, :typesense_index_name unless method_defined? :index_name
         alias_method :must_reindex?, :typesense_must_reindex? unless method_defined? :must_reindex?
+        alias_method :create_collection, :typesense_create_collection unless method_defined? :create_collection
+        alias_method :upsert_alias, :typesense_upsert_alias unless method_defined? :upsert_alias
+        alias_method :get_collection, :typesense_get_collection unless method_defined? :get_collection
+        alias_method :num_documents, :typesense_num_documents unless method_defined? :num_documents
+        alias_method :get_alias, :typesense_get_alias unless method_defined? :get_alias
+        alias_method :upsert_document, :typesense_upsert_document unless method_defined? :upsert_document
+        alias_method :import_documents, :typesense_import_documents unless method_defined? :import_documents
+        alias_method :retrieve_document, :typesense_retrieve_document unless method_defined? :retrieve_document
+        alias_method :delete_document, :typesense_delete_document unless method_defined? :delete_document
+        alias_method :delete_collection, :typesense_delete_collection unless method_defined? :delete_collection
+        alias_method :delete_by_query, :typesense_delete_by_query unless method_defined? :delete_by_query
+        alias_method :search_collection, :typesense_search_collection unless method_defined? :search_collection
+        alias_method :multi_way_synonyms, :typesense_multi_way_synonyms unless method_defined? :multi_way_synonyms
+        alias_method :one_way_synonyms, :typesense_one_way_synonyms unless method_defined? :one_way_synonyms
       end
 
-      base.cattr_accessor :algoliasearch_options, :algoliasearch_settings
+      base.cattr_accessor :typesense_options, :typesense_settings, :typesense_client
     end
 
     def algoliasearch(options = {}, &block)
       self.algoliasearch_settings = IndexSettings.new(options, &block)
       self.algoliasearch_options = { :type => algolia_full_const_get(model_name.to_s), :per_page => algoliasearch_settings.get_setting(:hitsPerPage) || 10, :page => 1 }.merge(options)
+    def typesense_create_collection(collection_name, settings = nil)
+      fields = settings.get_setting(:predefined_fields)
+      default_sorting_field = settings.get_setting(:default_sorting_field)
+      multi_way_synonyms = settings.get_setting(:multi_way_synonyms)
+      one_way_synonyms = settings.get_setting(:one_way_synonyms)
+      symbols_to_index = settings.get_setting(:symbols_to_index)
+      token_separators = settings.get_setting(:token_separators)
+      enable_nested_fields = settings.get_setting(:enable_nested_fields)
+      metadata = settings.get_setting(:metadata)
+
+      # Build schema starting with collection name
+      schema = { name: collection_name }
+
+      # Add fields or set auto schema
+      schema[:fields] = if fields&.any?
+          fields
+        else
+          [{ "name" => ".*", "type" => "auto" }]
+        end
 
       attr_accessor :highlight_result, :snippet_result
+      schema[:default_sorting_field] = default_sorting_field if default_sorting_field
+      schema[:multi_way_synonyms] = multi_way_synonyms if multi_way_synonyms
+      schema[:token_separators] = token_separators if token_separators
+      schema[:enable_nested_fields] = enable_nested_fields if enable_nested_fields
+      schema[:metadata] = metadata if metadata
 
       if options[:synchronous] == true
         if defined?(::Sequel) && defined?(::Sequel::Model) && self < Sequel::Model
@@ -238,8 +275,101 @@ module Typesense
           end
         else
           after_validation :algolia_mark_synchronous if respond_to?(:after_validation)
+      client.collections.create(schema)
+      Rails.logger.info "Collection '#{collection_name}' created!"
+
+      multi_way_synonyms(collection_name, multi_way_synonyms) if multi_way_synonyms
+
+      one_way_synonyms(collection_name, one_way_synonyms) if one_way_synonyms
+    end
+
+    def typesense_multi_way_synonyms(collection, synonyms)
+      synonyms.each do |synonym_hash|
+        synonym_hash.each do |synonym_name, synonym|
+          typesense_client.collections[collection].synonyms.upsert(
+            synonym_name,
+            { "synonyms" => synonym }
+          )
         end
       end
+    end
+
+    def typesense_one_way_synonyms(collection, synonyms)
+      synonyms.each do |synonym_hash|
+        synonym_hash.each do |synonym_name, synonym|
+          typesense_client.collections[collection].synonyms.upsert(
+            synonym_name,
+            synonym
+          )
+        end
+      end
+    end
+
+    def typesense_upsert_alias(collection_name, alias_name)
+      typesense_client.aliases.upsert(alias_name, { "collection_name" => collection_name })
+    end
+
+    def typesense_get_collection(collection)
+      typesense_client.collections[collection].retrieve
+    rescue Typesense::Error::ObjectNotFound
+      nil
+    end
+
+    def typesense_num_documents(collection)
+      typesense_client.collections[collection].retrieve["num_documents"]
+    end
+
+    def typesense_get_alias(alias_name)
+      typesense_client.aliases[alias_name].retrieve
+    end
+
+    def typesense_upsert_document(object, collection, dirtyvalues = nil)
+      raise ArgumentError, "Object is required" unless object
+
+      typesense_client.collections[collection].documents.upsert(object, dirty_values: dirtyvalues) if dirtyvalues
+      typesense_client.collections[collection].documents.upsert(object)
+    end
+
+    def typesense_import_documents(jsonl_object, action, collection)
+      raise ArgumentError, "JSONL object is required" unless jsonl_object
+
+      typesense_client.collections[collection].documents.import(jsonl_object, action: action)
+    end
+
+    def typesense_retrieve_document(object_id, collection = nil)
+      if collection
+        typesense_client.collections[collection].documents[object_id].retrieve
+      else
+        collection_obj = typesense_ensure_init
+        typesense_client.collections[collection_obj[:alias_name]].documents[object_id].retrieve
+      end
+    end
+
+    def typesense_delete_document(object_id, collection)
+      typesense_client.collections[collection].documents[object_id].delete
+    end
+
+    def typesense_delete_by_query(collection, query)
+      typesense_client.collections[collection].documents.delete(filter_by: query)
+    end
+
+    def typesense_delete_collection(collection)
+      typesense_client.collections[collection].delete
+    end
+
+    def typesense_search_collection(search_parameters, collection)
+      typesense_client.collections[collection].documents.search(search_parameters)
+    end
+
+    def algoliasearch(options = {}, &block)
+      self.typesense_settings = IndexSettings.new(options, &block)
+      self.typesense_options = { type: typesense_full_const_get(model_name.to_s) }.merge(options)
+
+      self.typesense_client ||= Typesense.client
+      attr_accessor :highlight_result, :snippet_result
+
+      attr_accessor :highlight_result, :snippet_result
+
       if options[:enqueue]
         raise ArgumentError.new("Cannot use a enqueue if the `synchronous` option if set") if options[:synchronous]
         proc = if options[:enqueue] == true
