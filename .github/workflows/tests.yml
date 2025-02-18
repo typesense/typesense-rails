@@ -1,0 +1,57 @@
+name: tests
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    env:
+      RAILS_VERSION: '2.29'
+      BUNDLE_JOBS: 4
+      BUNDLE_RETRY: 3
+      BUNDLE_PATH: vendor/bundle
+
+    services:
+      typesense:
+        image: typesense/typesense:28.0.rc36
+        ports:
+          - 8108:8108
+        volumes:
+          - /tmp/typesense-data:/data
+          - /tmp/typesense-analytics:/analytics
+        env:
+          TYPESENSE_API_KEY: xyz
+          TYPESENSE_DATA_DIR: /data
+          TYPESENSE_ENABLE_CORS: true
+          TYPESENSE_ANALYTICS_DIR: /analytics
+          TYPESENSE_ENABLE_SEARCH_ANALYTICS: true
+
+    steps:
+      - name: Wait for Typesense
+        run: |
+          timeout 20 bash -c 'while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' localhost:8108/health)" != "200" ]]; do sleep 1; done' || false
+
+      - uses: actions/checkout@v4
+
+      - name: Install SQLite
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3 libsqlite3-dev
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3.7'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: |
+          bundle config set --local path 'vendor/bundle'
+          bundle install
+
+      - name: Run tests
+        run: bundle exec rake
