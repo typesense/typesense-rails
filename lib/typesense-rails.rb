@@ -467,7 +467,7 @@ module Typesense
           if typesense_conditional_index?(options)
             # delete non-indexable objects
             ids = group.reject { |o| typesense_indexable?(o, options) }.map { |o| typesense_object_id_of(o, options) }
-            delete_by_query(collection_obj[:alias_name], "id: #{ids.reject(&:blank?)}")
+            delete_by_query(collection_obj[:alias_name], "id: [#{ids.reject(&:blank?).join(",")}]")
 
             group = group.select { |o| typesense_indexable?(o, options) }
           end
