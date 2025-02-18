@@ -211,7 +211,8 @@ module Typesense
         alias_method :search, :typesense_search unless method_defined? :search
         alias_method :raw_search, :typesense_raw_search unless method_defined? :raw_search
         alias_method :index, :typesense_index unless method_defined? :index
-        alias_method :index_name, :typesense_index_name unless method_defined? :index_name
+        alias_method :index_name, :typesense_collection_name unless method_defined? :index_name
+        alias_method :collection_name, :typesense_collection_name unless method_defined? :collection_name
         alias_method :must_reindex?, :typesense_must_reindex? unless method_defined? :must_reindex?
         alias_method :create_collection, :typesense_create_collection unless method_defined? :create_collection
         alias_method :upsert_alias, :typesense_upsert_alias unless method_defined? :upsert_alias
@@ -230,6 +231,10 @@ module Typesense
       end
 
       base.cattr_accessor :typesense_options, :typesense_settings, :typesense_client
+    end
+
+    def collection_name(options)
+      "#{typesense_collection_name(options)}_#{Time.now.to_i}"
     end
 
     def typesense_create_collection(collection_name, settings = nil)
@@ -492,7 +497,7 @@ module Typesense
           master_index = typesense_ensure_init(options, settings, false)
           delete_collection(master_index[:alias_name])
         rescue ArgumentError
-          @typesense_indexes[settings] = { collection_name: "", alias_name: typesense_index_name(options) }
+          @typesense_indexes[settings] = { collection_name: "", alias_name: typesense_collection_name(options) }
           master_index = @typesense_indexes[settings]
         end
 
