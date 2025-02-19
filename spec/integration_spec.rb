@@ -178,7 +178,7 @@ class Color < ActiveRecord::Base
   attr_accessor :not_indexed
 
   typesense collection_name: safe_index_name("Color"), per_environment: true do
-    predefined_fields [
+    fields [
       { "name" => "name", "type" => "string", "facet" => true },
       { "name" => "short_name", "type" => "string", "index" => false, "optional" => true },
       { "name" => "hex", "type" => "int32" },

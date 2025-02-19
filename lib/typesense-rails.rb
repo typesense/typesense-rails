@@ -52,6 +52,7 @@ module Typesense
       :multi_way_synonyms,
       :one_way_synonyms,
       :predefined_fields,
+      :fields,
       :default_sorting_field,
       :symbols_to_index,
       :token_separators,
@@ -242,13 +243,14 @@ module Typesense
     end
 
     def typesense_create_collection(collection_name, settings = nil)
-      fields = settings.get_setting(:predefined_fields)
+      fields = settings.get_setting(:predefined_fields) || settings.get_setting(:fields)
       default_sorting_field = settings.get_setting(:default_sorting_field)
       multi_way_synonyms = settings.get_setting(:multi_way_synonyms)
       one_way_synonyms = settings.get_setting(:one_way_synonyms)
       symbols_to_index = settings.get_setting(:symbols_to_index)
       token_separators = settings.get_setting(:token_separators)
       enable_nested_fields = settings.get_setting(:enable_nested_fields)
+      metadata = settings.get_setting(:metadata)
       typesense_client.collections.create(
         { "name" => collection_name }
           .merge(
@@ -263,7 +265,8 @@ module Typesense
             default_sorting_field ? { "default_sorting_field" => default_sorting_field } : {},
             symbols_to_index ? { "symbols_to_index" => symbols_to_index } : {},
             token_separators ? { "token_separators" => token_separators } : {},
-            enable_nested_fields ? { "enable_nested_fields" => enable_nested_fields } : {}
+            enable_nested_fields ? { "enable_nested_fields" => enable_nested_fields } : {},
+            metadata ? { "metadata" => metadata } : {}
           )
       )
       Rails.logger.info "Collection '#{collection_name}' created!"
