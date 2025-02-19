@@ -1,5 +1,5 @@
 require File.expand_path(File.join(File.dirname(__FILE__), "spec_helper"))
-require "debug"
+# require "debug"
 # DEBUGGER__::CONFIG.set_config(
 #   port: 12345,
 #   nonstop: false,
