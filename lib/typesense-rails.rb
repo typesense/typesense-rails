@@ -297,10 +297,12 @@ module Typesense
       typesense_client.collections[collection].documents.upsert(object)
     end
 
-    def typesense_import_documents(jsonl_object, action, collection)
+    def typesense_import_documents(jsonl_object, action, collection, batch_size: nil)
       raise ArgumentError, "JSONL object is required" unless jsonl_object
+      import_options = { action: action }
+      import_options[:batch_size] = batch_size if batch_size
 
-      typesense_client.collections[collection].documents.import(jsonl_object, action: action)
+      typesense_client.collections[collection].documents.import(jsonl_object, import_options)
     end
 
     def typesense_retrieve_document(object_id, collection = nil)
@@ -527,7 +529,7 @@ module Typesense
       nil
     end
 
-    def typesense_index_objects(objects)
+    def typesense_index_objects(objects, batch_size = nil)
       # typesense_index_objects: Upserts given object array into collection of given model.
       typesense_configurations.each do |options, settings|
         next if typesense_indexing_disabled?(options)
@@ -537,7 +539,7 @@ module Typesense
           settings.get_attributes(o).merge!("id" => typesense_object_id_of(o, options)).to_json
         end
         jsonl_object = documents.join("\n")
-        import_documents(jsonl_object, "upsert", collection_obj[:alias_name])
+        import_documents(jsonl_object, "upsert", collection_obj[:alias_name], batch_size: batch_size)
         Rails.logger.info "#{objects.length} objects upserted into #{collection_obj[:collection_name]}!"
       end
       nil
