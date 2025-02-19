@@ -200,6 +200,7 @@ module Typesense
     # lazy load the ActiveJob class to ensure the
     # queue is initialized before using it
     autoload :TypesenseJob, "typesense/typesense_job"
+    autoload :ImportJob, "typesense/import_job"
   end
 
   # these are the class methods added when Typesense is included
@@ -529,8 +530,21 @@ module Typesense
       nil
     end
 
-    def typesense_index_objects(objects, batch_size = nil)
-      # typesense_index_objects: Upserts given object array into collection of given model.
+    def typesense_index_objects_async(objects, batch_size = Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
+      typesense_configurations.each do |options, settings|
+        next if typesense_indexing_disabled?(options)
+        collection_obj = typesense_ensure_init(options, settings)
+        documents = objects.map do |o|
+          settings.get_attributes(o).merge!("id" => typesense_object_id_of(o, options)).to_json
+        end
+        jsonl_object = documents.join("\n")
+        ImportJob.perform(jsonl_object, collection_obj[:alias_name], batch_size)
+        Rails.logger.info "#{objects.length} objects enqueued for import into #{collection_obj[:collection_name]}"
+      end
+      nil
+    end
+
+    def typesense_index_objects(objects, batch_size = Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
       typesense_configurations.each do |options, settings|
         next if typesense_indexing_disabled?(options)
 

@@ -1,5 +1,5 @@
 require File.expand_path(File.join(File.dirname(__FILE__), "spec_helper"))
-# require "debug"
+require "debug"
 # DEBUGGER__::CONFIG.set_config(
 #   port: 12345,
 #   nonstop: false,
@@ -775,6 +775,34 @@ describe "Colors" do
 
   it "should reindex with a temporary index name based on custom index name & per_environment" do
     Color.reindex
+  end
+  it "should process objects async" do
+    Color.clear_index!
+
+    colors = []
+    Color.without_auto_index do
+      colors = [
+        Color.create!(name: "red", short_name: "r", hex: 0xFF0000),
+        Color.create!(name: "green", short_name: "g", hex: 0x00FF00),
+        Color.create!(name: "blue", short_name: "b", hex: 0x0000FF),
+      ]
+    end
+
+    expect(Typesense::ImportJob).to receive(:perform).exactly(1).times.and_call_original do |jsonl, collection_name, batch_size|
+      documents = jsonl.split("\n").map { |d| JSON.parse(d) }
+      expect(documents.length).to eq(3)
+      expect(documents.map { |d| d["name"] }).to contain_exactly("red", "green", "blue")
+    end
+
+    Color.typesense_index_objects_async(colors)
+
+    # Allow time for indexing to complete
+    sleep(1)
+
+    results = Color.search("*", "")
+    expect(results.size).to eq(3)
+    expect(results.map(&:name)).to contain_exactly("red", "green", "blue")
+    expect(results.map(&:hex)).to contain_exactly(0xFF0000, 0x00FF00, 0x0000FF)
   end
 end
 
