@@ -30,6 +30,7 @@ end
 group :development do
   gem 'rake', '>= 10.1.0'
   gem 'rdoc'
+  gem "rubocop", "~> 1.19"
 end
 
 group :test, :development do
@@ -38,3 +39,4 @@ group :test, :development do
   gem 'pagy'
 end
 
+gem "lefthook", "~> 0.7.6"

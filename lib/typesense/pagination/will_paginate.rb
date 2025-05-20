@@ -8,7 +8,9 @@ module Typesense
   module Pagination
     class WillPaginate
       def self.create(results, total_hits, options = {})
-        ::WillPaginate::Collection.create(options[:page], options[:per_page], total_hits) { |pager| pager.replace results }
+        ::WillPaginate::Collection.create(options[:page], options[:per_page], total_hits) do |pager|
+          pager.replace results
+        end
       end
     end
   end

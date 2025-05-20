@@ -6,6 +6,7 @@ module Typesense
       load "typesense/tasks/typesense.rake"
     end
   end
+
   class Engine < Rails::Engine
   end
 end
