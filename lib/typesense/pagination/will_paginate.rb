@@ -1,8 +1,7 @@
 begin
   require 'will_paginate/collection'
 rescue LoadError
-  raise(Typesense::Error::MissingConfiguration,
-        "Typesense: Please add 'will_paginate' to your Gemfile to use will_paginate pagination backend")
+  raise(Typesense::BadConfiguration, "Typesense: Please add 'will_paginate' to your Gemfile to use will_paginate pagination backend")
 end
 
 module Typesense

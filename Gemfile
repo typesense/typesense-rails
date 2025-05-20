@@ -1,8 +1,8 @@
 source "http://rubygems.org"
 
 gem 'json', '>= 1.5.1'
-#gem 'algolia', '< 3.0.0'
 gem "typesense", "~> 0.13.0"
+
 
 if defined?(RUBY_ENGINE) && RUBY_ENGINE == 'rbx'
   gem 'rubysl', '~> 2.0', :platform => :rbx
@@ -13,11 +13,11 @@ group :test do
   gem 'rails', "~> #{rails_version}"
   gem 'active_model_serializers'
   if Gem::Version.new(rails_version) >= Gem::Version.new('6.0')
-    gem 'sqlite3', '~> 1.4.0', :platform => [:rbx, :ruby]
+    gem 'sqlite3', '~> 1.6.0', :platform => [:rbx, :ruby]
   else
     gem 'sqlite3', '< 1.4.0', :platform => [:rbx, :ruby]
   end
-  gem 'rspec', '>= 2.5.0', '< 3.0'
+  gem 'rspec', '~> 3.0'
   gem 'jdbc-sqlite3', :platform => :jruby
   gem 'activerecord-jdbc-adapter', :platform => :jruby
   gem 'activerecord-jdbcsqlite3-adapter', :platform => :jruby
@@ -28,8 +28,7 @@ group :test do
 end
 
 group :development do
-  gem 'travis'
-  gem 'rake', '~> 10.1.0'
+  gem 'rake', '>= 10.1.0'
   gem 'rdoc'
   gem "rubocop", "~> 1.19"
 end
@@ -37,6 +36,7 @@ end
 group :test, :development do
   gem 'will_paginate', '>= 2.3.15'
   gem 'kaminari', '< 1'
+  gem 'pagy'
 end
 
 gem "lefthook", "~> 0.7.6"

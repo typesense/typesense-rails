@@ -1,6 +1,5 @@
 unless defined? Kaminari
-  raise(Typesense::Error::MissingConfiguration,
-        "Typesense: Please add 'kaminari' to your Gemfile to use kaminari pagination backend")
+  raise(Typesense::BadConfiguration, "Typesense: Please add 'kaminari' to your Gemfile to use kaminari pagination backend")
 end
 
 require 'kaminari/models/array_extension'
@@ -9,7 +8,7 @@ module Typesense
   module Pagination
     class Kaminari < ::Kaminari::PaginatableArray
       def initialize(array, options)
-        super(array, options)
+        super(array, **options)
       end
 
       def limit(_num)

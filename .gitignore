@@ -26,5 +26,5 @@ debug.log
 data.sqlite3
 sequel_data.sqlite3
 
-.vscode
-workspace.code-workspace
+
+vendor

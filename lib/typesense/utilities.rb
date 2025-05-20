@@ -19,27 +19,27 @@ module Typesense
       def reindex_all_models
         klasses = get_model_classes
 
-        puts ''
+        puts ""
         puts "Reindexing #{klasses.count} models: #{klasses.to_sentence}."
-        puts ''
+        puts ""
 
         klasses.each do |klass|
           puts klass
           puts "Reindexing #{klass.count} records..."
-          klass.algolia_reindex
+          klass.typesense_reindex
         end
       end
 
       def set_settings_all_models
         klasses = get_model_classes
 
-        puts ''
+        puts ""
         puts "Pushing settings for #{klasses.count} models: #{klasses.to_sentence}."
-        puts ''
+        puts ""
 
         klasses.each do |klass|
           puts "Pushing #{klass} settings..."
-          klass.algolia_set_settings
+          klass.typesense_set_settings
         end
       end
     end
