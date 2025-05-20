@@ -1,8 +1,10 @@
-# Typesense-Rails
+# typesense-tails
 
-A Ruby on Rails integration for Typesense search engine that provides seamless integration with ActiveRecord, Sequel and Mongoid models. This gem is a fork of the [algolia-rails](https://github.com/algolia/algoliasearch-rails) gem, adapted to work with Typesense while maintaining similar functionality and API patterns.
+A Ruby on Rails integration for Typesense search engine that provides seamless integration with ActiveRecord, Sequel and Mongoid models. 
 
-This gem is a fork of the [algolia-rails](https://github.com/algolia/algoliasearch-rails) gem, adapted to work with Typesense. The core integration patterns and much of the functionality were inspired by Algolia's excellent work. Special thanks to the Algolia team for their original implementation, which provided a solid foundation for this Typesense integration.
+This gem is a fork of the [algolia-rails](https://github.com/algolia/algoliasearch-rails) gem, adapted to work with Typesense while maintaining similar functionality and API patterns.
+The core integration patterns and much of the functionality were inspired by Algolia's excellent work. 
+Special thanks to the Algolia team for their original implementation, which provided a solid foundation for this Typesense integration.
 
 ## Features
 
@@ -227,6 +229,10 @@ bundle exec rake
 5. Create a new Pull Request
 
 Please make sure to update tests as appropriate and follow the existing coding style.
+
+### Releasing
+
+To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
 
 ## License
 
