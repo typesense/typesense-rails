@@ -16,7 +16,7 @@ jobs:
 
     services:
       typesense:
-        image: typesense/typesense:28.0.rc36
+        image: typesense/typesense:28.0
         ports:
           - 8108:8108
         volumes:
