@@ -1,4 +1,4 @@
-# typesense-tails
+# typesense-rails
 
 A Ruby on Rails integration for Typesense search engine that provides seamless integration with ActiveRecord, Sequel and Mongoid models. 
 
