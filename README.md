@@ -26,7 +26,7 @@ Special thanks to the Algolia team for their original implementation, which prov
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'typesense-rails'
+gem 'typesense-rails', '~> 1.0.0.rc1'
 ```
 
 Then execute:
