@@ -14,14 +14,12 @@ Gem::Specification.new do |s|
   s.description = "Typesense integration to your favorite ORM"
   s.email = "contact@typesense.com"
   s.extra_rdoc_files = [
-    "CHANGELOG.MD",
     "LICENSE",
     "README.md",
   ]
   s.files = [
     ".document",
     ".rspec",
-    "CHANGELOG.MD",
     "Gemfile",
     "Gemfile.lock",
     "LICENSE",
@@ -30,7 +28,8 @@ Gem::Specification.new do |s|
     "typesense-rails.gemspec",
     "lib/typesense-rails.rb",
     "lib/typesense/typesense_job.rb",
-    "lib/typesense/configuration.rb",
+    "lib/typesense/config.rb",
+    "lib/typesense/import_job.rb",
     "lib/typesense/pagination.rb",
     "lib/typesense/pagination/kaminari.rb",
     "lib/typesense/pagination/pagy.rb",
@@ -40,7 +39,7 @@ Gem::Specification.new do |s|
     "lib/typesense/utilities.rb",
     "lib/typesense/version.rb",
     "spec/spec_helper.rb",
-    "spec/utilities_spec.rb",
+    "spec/integration_spec.rb",
   ]
   s.homepage = "http://github.com/typesense/typesense-rails"
   s.licenses = ["MIT"]
