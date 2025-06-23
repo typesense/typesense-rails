@@ -126,11 +126,29 @@ class Profile < ApplicationRecord
 end
 ```
 
+### Working with ActionText
+
+ActionText `has_rich_text` defines an association to the ActionText::RichText model. Use `to_plain_text` on this association to get a plain text version for indexing with Typesense.
+
+```ruby
+class Product < ApplicationRecord
+  include Typesense
+
+  has_rich_text :description
+
+  typesense do
+    attribute :description do
+      description.to_plain_text
+    end
+  end
+end
+```
+
 ### Searching
 
 ```ruby
-# Basic search
-results = Product.search('phone', 'name')
+# Basic search of "phone" against name and description attributes
+results = Product.search('phone', 'name,description')
 
 # Search with filters and sorting
 results = Product.search('phone', 'name', {
