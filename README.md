@@ -229,6 +229,23 @@ Typesense.configuration = {
 }
 ```
 
+### Pagination & Search in a controller with Pagy
+
+```ruby
+class ProductsController < ApplicationController
+  def index
+    # If `params[:q]` is blank, Typesense will automatically use "*" to return all documents
+    @pagy, @products = Product.search(params[:q], "name,description")
+  end
+end
+```
+
+```erb
+<h1>Search results for <%= params[:q] %></h1>
+<%= render @products %>
+<%== pagy_nav(@pagy) if @pagy.pages > 1 %>
+```
+
 ## Testing
 
 To run the test suite:
