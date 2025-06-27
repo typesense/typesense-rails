@@ -365,7 +365,7 @@ module Typesense
       if options[:enqueue]
         proc = if options[:enqueue] == true
             proc do |record, remove|
-              typesenseJob.perform_later(record, remove ? "typesense_remove_from_index!" : "typesense_index!")
+              TypesenseJob.perform_later(record, remove ? "typesense_remove_from_index!" : "typesense_index!")
             end
           elsif options[:enqueue].respond_to?(:call)
             options[:enqueue]
