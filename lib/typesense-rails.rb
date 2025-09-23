@@ -17,8 +17,6 @@ rescue LoadError
 end
 
 require "logger"
-Rails.logger = ActiveSupport::TaggedLogging.new(ActiveSupport::Logger.new(STDOUT))
-Rails.logger.level = Logger::INFO
 
 module Typesense
   class NotConfigured < StandardError; end
