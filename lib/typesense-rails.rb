@@ -18,7 +18,7 @@ end
 
 require "logger"
 Rails.logger = ActiveSupport::TaggedLogging.new(ActiveSupport::Logger.new(STDOUT))
-Rails.logger.level = Logger::INFO
+Rails.logger.level = Logger::WARN
 
 module Typesense
   class NotConfigured < StandardError; end
