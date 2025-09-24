@@ -47,7 +47,8 @@ Typesense.configuration = {
     protocol: 'http'     # For Typesense Cloud use https
   }],
   api_key: 'your-api-key',
-  connection_timeout_seconds: 2
+  connection_timeout_seconds: 2,
+  log_level: :info        # Optional: Set logging level (:debug, :info, :warn, :error, :fatal, :unknown)
 }
 ```
 
