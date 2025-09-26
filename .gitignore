@@ -28,3 +28,5 @@ sequel_data.sqlite3
 
 
 vendor
+
+typesense-data
