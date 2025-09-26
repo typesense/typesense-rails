@@ -10,7 +10,7 @@ module Typesense
         vars = {
           count: total_hits,
           page: options[:page],
-          items: options[:per_page]
+          limit: options[:per_page]
         }
 
         pagy_version = Gem::Version.new(::Pagy::VERSION)
