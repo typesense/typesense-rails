@@ -48,7 +48,7 @@ Typesense.configuration = {
   }],
   api_key: 'your-api-key',
   connection_timeout_seconds: 2,
-  log_level: :info        # Optional: Set logging level (:debug, :info, :warn, :error, :fatal, :unknown)
+  log_level: :info        # Messages below this level will be silenced. One of (:debug, :info, :warn, :error, :fatal)
 }
 ```
 

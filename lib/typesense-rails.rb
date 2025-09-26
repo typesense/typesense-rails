@@ -17,8 +17,6 @@ rescue LoadError
 end
 
 require "logger"
-Rails.logger = ActiveSupport::TaggedLogging.new(ActiveSupport::Logger.new(STDOUT))
-Rails.logger.level = Logger::WARN
 
 module Typesense
   class NotConfigured < StandardError; end
@@ -32,6 +30,37 @@ module Typesense
 
   class << self
     attr_reader :included_in
+    attr_writer :logger
+
+    def logger
+      return @logger if defined?(@logger) && @logger
+
+      rails_logger = (defined?(::Rails) && Rails.respond_to?(:logger)) ? Rails.logger : nil
+      @logger = rails_logger || Logger.new($stdout)
+    end
+
+    def log(severity, message = nil, &block)
+      # If a min log level is configured, skip below-threshold messages
+      min_level = log_level
+      if min_level && !passes_min_level?(severity, min_level)
+        return
+      end
+
+      sev_const = log_level_to_const(severity)
+      if logger.respond_to?(:tagged)
+        logger.tagged("Typesense") { logger.add(sev_const, message, &block) }
+      else
+        logger.add(sev_const, message, &block)
+      end
+    end
+
+    def passes_min_level?(severity, min_level)
+      return true if min_level.nil?
+
+      sev_const = log_level_to_const(severity)
+      min_const = log_level_to_const(min_level)
+      sev_const >= min_const
+    end
 
     def included(klass)
       @included_in ||= []
@@ -269,7 +298,7 @@ module Typesense
             metadata ? { "metadata" => metadata } : {}
           )
       )
-      Rails.logger.debug "Collection '#{collection_name}' created!"
+      Typesense.log(:debug, "Collection '#{collection_name}' created!")
 
       typesense_multi_way_synonyms(collection_name, multi_way_synonyms) if multi_way_synonyms
 
@@ -542,7 +571,7 @@ module Typesense
         end
         jsonl_object = documents.join("\n")
         ImportJob.perform(jsonl_object, collection_obj[:alias_name], batch_size)
-        Rails.logger.debug "#{objects.length} objects enqueued for import into #{collection_obj[:collection_name]}"
+        Typesense.log(:debug, "#{objects.length} objects enqueued for import into #{collection_obj[:collection_name]}")
       end
       nil
     end
@@ -557,7 +586,7 @@ module Typesense
         end
         jsonl_object = documents.join("\n")
         import_documents(jsonl_object, "upsert", collection_obj[:alias_name], batch_size: batch_size)
-        Rails.logger.debug "#{objects.length} objects upserted into #{collection_obj[:collection_name]}!"
+        Typesense.log(:debug, "#{objects.length} objects upserted into #{collection_obj[:collection_name]}!")
       end
       nil
     end
@@ -588,7 +617,7 @@ module Typesense
           begin
             api_response = delete_document(object_id, collection_obj[:collection_name])
           rescue Typesense::Error::ObjectNotFound => e
-            Rails.logger.error "Object not found in index: #{e.message}"
+            Typesense.log(:error, "Object not found in index: #{e.message}")
           end
         end
       end
@@ -611,9 +640,9 @@ module Typesense
         begin
           delete_document(object_id, collection_obj[:alias_name])
         rescue Typesense::Error::ObjectNotFound => e
-          Rails.logger.error "Object #{object_id} could not be removed from #{collection_obj[:collection_name]} collection! Use reindex to update the collection."
+          Typesense.log(:error, "Object #{object_id} could not be removed from #{collection_obj[:collection_name]} collection! Use reindex to update the collection.")
         end
-        Rails.logger.debug "Removed document with object id '#{object_id}' from #{collection_obj[:collection_name]}"
+        Typesense.log(:debug, "Removed document with object id '#{object_id}' from #{collection_obj[:collection_name]}")
       end
       nil
     end
@@ -626,7 +655,7 @@ module Typesense
         collection_obj = typesense_ensure_init(options, settings, false)
 
         delete_collection(collection_obj[:alias_name])
-        Rails.logger.debug "Deleted #{collection_obj[:alias_name]} collection!"
+        Typesense.log(:debug, "Deleted #{collection_obj[:alias_name]} collection!")
         @typesense_indexes[settings] = nil
       end
       nil
