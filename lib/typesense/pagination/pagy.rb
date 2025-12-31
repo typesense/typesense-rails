@@ -14,7 +14,9 @@ module Typesense
         }
 
         pagy_version = Gem::Version.new(::Pagy::VERSION)
-        pagy = if pagy_version >= Gem::Version.new('9.0')
+        pagy = if pagy_version >= Gem::Version.new("43.0.0.rc1")
+                 ::Pagy::Offset.new(**vars)
+               elsif pagy_version >= Gem::Version.new("9.0")
                  ::Pagy.new(**vars)
                else
                  ::Pagy.new(vars)
