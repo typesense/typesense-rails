@@ -684,6 +684,10 @@ module Typesense
         @typesense_json["facet_counts"]
       end
 
+      def total_hits
+        @typesense_json["found"]
+      end
+
       private
 
       def typesense_init_raw_answer(json)
