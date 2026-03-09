@@ -52,7 +52,7 @@ Gem::Specification.new do |s|
 
     if Gem::Version.new(Gem::VERSION) >= Gem::Version.new("1.2.0")
       s.add_runtime_dependency(%q<json>, [">= 1.5.1"])
-      s.add_runtime_dependency(%q<typesense>, [">= 0.13.0"])
+      s.add_runtime_dependency(%q<typesense>, [">= 5.0.0", "< 6.0.0"])
       s.add_development_dependency(%q<will_paginate>, [">= 2.3.15"])
       s.add_development_dependency(%q<kaminari>, [">= 0"])
       s.add_development_dependency(%q<pagy>, [">= 0"])
@@ -60,10 +60,10 @@ Gem::Specification.new do |s|
       s.add_development_dependency "rdoc"
     else
       s.add_dependency(%q<json>, [">= 1.5.1"])
-      s.add_dependency(%q<typesense>, [">= 0.13.0"])
+      s.add_dependency(%q<typesense>, [">= 5.0.0", "< 6.0.0"])
     end
   else
     s.add_dependency(%q<json>, [">= 1.5.1"])
-    s.add_dependency(%q<typesense>, [">= 0.13.0"])
+    s.add_dependency(%q<typesense>, [">= 5.0.0", "< 6.0.0"])
   end
 end

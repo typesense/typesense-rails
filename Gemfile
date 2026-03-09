@@ -1,7 +1,7 @@
 source "http://rubygems.org"
 
 gem 'json', '>= 1.5.1'
-gem "typesense", "~> 0.13.0"
+gem "typesense", ">= 5.0.0", "< 6.0.0"
 
 
 if defined?(RUBY_ENGINE) && RUBY_ENGINE == 'rbx'
