@@ -80,6 +80,8 @@ module Typesense
     OPTIONS = [
       :multi_way_synonyms,
       :one_way_synonyms,
+      :synonym_sets,
+      :curation_sets,
       :predefined_fields,
       :fields,
       :default_sorting_field,
@@ -276,6 +278,8 @@ module Typesense
       default_sorting_field = settings.get_setting(:default_sorting_field)
       multi_way_synonyms = settings.get_setting(:multi_way_synonyms)
       one_way_synonyms = settings.get_setting(:one_way_synonyms)
+      synonym_sets = settings.get_setting(:synonym_sets)
+      curation_sets = settings.get_setting(:curation_sets)
       symbols_to_index = settings.get_setting(:symbols_to_index)
       token_separators = settings.get_setting(:token_separators)
       enable_nested_fields = settings.get_setting(:enable_nested_fields)
