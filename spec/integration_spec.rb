@@ -173,6 +173,20 @@ end
 class Camera < Product
 end
 
+class V30ResourceProduct < ActiveRecord::Base
+  self.table_name = "products"
+  self.inheritance_column = :_type_disabled
+
+  include Typesense
+
+  typesense auto_index: false,
+            index_name: safe_index_name("v30_resource_products") do
+    attribute :name
+    synonym_sets [safe_index_name("shared-product-synonyms")]
+    curation_sets [safe_index_name("shared-product-curations")]
+  end
+end
+
 class Color < ActiveRecord::Base
   include Typesense
   attr_accessor :not_indexed
@@ -1046,6 +1060,199 @@ describe "Book" do
         expect(b["hits"][0]["highlights"][0]["snippet"]).to eq('"&gt; <mark>hack0r</mark>')
       end
     end
+  end
+end
+
+describe "Typesense version compatibility" do
+  let(:settings) { Product.typesense_settings }
+
+  it "uses collection-level synonyms on v29" do
+    allow(Product).to receive(:typesense_server_major_version).and_return(29)
+    expect(Product).to receive(:typesense_multi_way_synonyms)
+      .with("products_v29", settings.get_setting(:multi_way_synonyms))
+    expect(Product).to receive(:typesense_one_way_synonyms)
+      .with("products_v29", settings.get_setting(:one_way_synonyms))
+
+    Product.apply_typesense_collection_resources(
+      "products_v29",
+      multi_way_synonyms: settings.get_setting(:multi_way_synonyms),
+      one_way_synonyms: settings.get_setting(:one_way_synonyms)
+    )
+  end
+
+  it "creates and attaches synonym sets on v30+" do
+    collection_resource = double("collection_resource")
+    collections_resource = double("collections_resource")
+    synonym_sets_resource = double("synonym_sets_resource")
+    client = double("typesense_client", collections: collections_resource, synonym_sets: synonym_sets_resource)
+
+    allow(Product).to receive(:typesense_server_major_version).and_return(30)
+    allow(Product).to receive(:typesense_client).and_return(client)
+    expect(collections_resource).to receive(:[]).with("products_v30").and_return(collection_resource)
+    expect(synonym_sets_resource).to receive(:upsert).with("products_v30_synonyms_index", { "items" => [] }).ordered
+    expect(synonym_sets_resource).to receive(:upsert).with(
+      "products_v30_synonyms_index",
+      {
+        "items" => [
+          { "id" => "phone-synonym", "synonyms" => %w[galaxy samsung samsung_electronics] },
+          { "id" => "smart-phone-synonym", "root" => "smartphone",
+            "synonyms" => %w[nokia samsung motorola android] }
+        ]
+      }
+    ).ordered
+    expect(collection_resource).to receive(:update) do |payload|
+      expect(payload["synonym_sets"]).to match_array(%w[existing-shared shared-synonyms products_v30_synonyms_index])
+      expect(payload["curation_sets"]).to match_array(%w[existing-curation shared-curations])
+    end
+
+    Product.apply_typesense_collection_resources(
+      "products_v30",
+      multi_way_synonyms: settings.get_setting(:multi_way_synonyms),
+      one_way_synonyms: settings.get_setting(:one_way_synonyms),
+      synonym_sets: ["shared-synonyms"],
+      curation_sets: ["shared-curations"],
+      existing_collection: {
+        "synonym_sets" => ["existing-shared"],
+        "curation_sets" => ["existing-curation"]
+      }
+    )
+  end
+
+  it "rejects v30-only collection resources on v29" do
+    allow(Product).to receive(:typesense_server_major_version).and_return(29)
+
+    expect do
+      Product.apply_typesense_collection_resources(
+        "products_v29",
+        synonym_sets: ["shared-synonyms"]
+      )
+    end.to raise_error(Typesense::BadConfiguration, /synonym_sets require Typesense v30.0 or newer/)
+  end
+end
+
+describe "Typesense v30 resource integration" do
+  before do
+    skip("SynonymSets and CurationSets are only supported in Typesense v30+") unless typesense_v30_or_above?
+  end
+
+  after do
+    begin
+      Typesense.client.synonym_sets.retrieve.each do |set|
+        Typesense.client.synonym_sets[set["name"]].delete if set["name"].include?(SAFE_INDEX_PREFIX)
+      end
+    rescue StandardError
+      nil
+    end
+
+    begin
+      Typesense.client.curation_sets.retrieve.each do |set|
+        Typesense.client.curation_sets[set["name"]].delete if set["name"].include?(SAFE_INDEX_PREFIX)
+      end
+    rescue StandardError
+      nil
+    end
+
+    begin
+      V30ResourceProduct.clear_index!
+    rescue StandardError
+      nil
+    end
+
+    begin
+      Product.clear_index!
+    rescue StandardError
+      nil
+    end
+  end
+
+  it "attaches generated synonym sets for inline synonym DSL" do
+    begin
+      Product.clear_index!
+    rescue StandardError
+      nil
+    end
+    collection_obj = Product.typesense_index
+
+    collection = Typesense.client.collections[collection_obj[:collection_name]].retrieve
+    generated_synonym_set = "#{collection_obj[:collection_name]}_synonyms_index"
+
+    expect(collection["synonym_sets"]).to include(generated_synonym_set)
+
+    synonym_set = Typesense.client.synonym_sets[generated_synonym_set].retrieve
+    item_ids = synonym_set.fetch("items").map { |item| item["id"] }
+
+    expect(item_ids).to include("phone-synonym", "smart-phone-synonym")
+  end
+
+  it "attaches explicit synonym sets and curation sets to the collection" do
+    synonym_set_name = safe_index_name("shared-product-synonyms")
+    curation_set_name = safe_index_name("shared-product-curations")
+
+    Typesense.client.synonym_sets.upsert(
+      synonym_set_name,
+      {
+        "items" => [
+          { "id" => "shared-phone", "root" => "phone", "synonyms" => %w[handset mobile] }
+        ]
+      }
+    )
+    Typesense.client.curation_sets.upsert(
+      curation_set_name,
+      {
+        "items" => [
+          {
+            "id" => "promote-phone",
+            "rule" => { "query" => "phone", "match" => "exact" },
+            "includes" => [{ "id" => "1", "position" => 1 }],
+            "excludes" => [],
+            "filter_curated_hits" => false,
+            "remove_matched_tokens" => false,
+            "stop_processing" => true
+          }
+        ]
+      }
+    )
+
+    V30ResourceProduct.typesense_index
+
+    collection = Typesense.client.collections[V30ResourceProduct.collection_name].retrieve
+
+    expect(collection["synonym_sets"]).to include(synonym_set_name)
+    expect(collection["curation_sets"]).to include(curation_set_name)
+  end
+
+  it "preserves attached synonym sets and curation sets through reindex" do
+    synonym_set_name = safe_index_name("shared-product-synonyms")
+    curation_set_name = safe_index_name("shared-product-curations")
+
+    Typesense.client.synonym_sets.upsert(
+      synonym_set_name,
+      { "items" => [{ "id" => "shared-phone", "root" => "phone", "synonyms" => %w[handset mobile] }] }
+    )
+    Typesense.client.curation_sets.upsert(
+      curation_set_name,
+      {
+        "items" => [
+          {
+            "id" => "promote-phone",
+            "rule" => { "query" => "phone", "match" => "exact" },
+            "includes" => [{ "id" => "1", "position" => 1 }],
+            "excludes" => [],
+            "filter_curated_hits" => false,
+            "remove_matched_tokens" => false,
+            "stop_processing" => true
+          }
+        ]
+      }
+    )
+
+    V30ResourceProduct.typesense_index
+    V30ResourceProduct.reindex
+
+    collection = Typesense.client.collections[V30ResourceProduct.collection_name].retrieve
+
+    expect(collection["synonym_sets"]).to include(synonym_set_name)
+    expect(collection["curation_sets"]).to include(curation_set_name)
   end
 end
 
