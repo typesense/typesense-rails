@@ -7,7 +7,12 @@ permissions:
 
 jobs:
   test:
+    name: test (typesense ${{ matrix.typesense-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        typesense-version: ['28.0', '30.1']
     
     env:
       BUNDLE_JOBS: 4
@@ -16,7 +21,7 @@ jobs:
 
     services:
       typesense:
-        image: typesense/typesense:28.0
+        image: typesense/typesense:${{ matrix.typesense-version }}
         ports:
           - 8108:8108
         volumes:
