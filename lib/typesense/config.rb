@@ -16,6 +16,8 @@ module Typesense
       @@pagination_backend = configuration[:pagination_backend] if configuration.key?(:pagination_backend)
       @@log_level = configuration[:log_level] if configuration.key?(:log_level)
       @@configuration = configuration
+      @client = nil
+      reset_server_version_cache!
     end
 
     def pagination_backend
@@ -65,6 +67,22 @@ module Typesense
 
     def setup_client
       @client = Typesense::Client.new(@@configuration)
+    end
+
+    def server_major_version
+      @server_major_version ||= begin
+        version = debug_info.fetch("version", "")
+        version == "nightly" ? 30 : version.split(".").first.to_i
+      end
+    end
+
+    def debug_info
+      @debug_info ||= client.debug.retrieve
+    end
+
+    def reset_server_version_cache!
+      @server_major_version = nil
+      @debug_info = nil
     end
   end
 end
