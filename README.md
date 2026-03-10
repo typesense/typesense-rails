@@ -18,7 +18,8 @@ Special thanks to the Algolia team for their original implementation, which prov
 - Environment-specific indexing
 - Support for faceted search and filtering
 - Customizable schema with predefined fields
-- Multi-way and one-way synonyms support
+- Multi-way and one-way synonyms support across Typesense v29 and v30+
+- Direct attachment of v30+ synonym sets and curation sets
 - Rake tasks for index management
 
 ## Installation
@@ -91,6 +92,10 @@ class Product < ApplicationRecord
       }
     ]
 
+    # Attach existing global resources on Typesense v30+
+    synonym_sets ["catalog-synonyms"]
+    curation_sets ["catalog-curations"]
+
     # Symbols to index
     symbols_to_index ["-", "_"]
 
@@ -102,6 +107,9 @@ class Product < ApplicationRecord
   end
 end
 ```
+
+For Typesense v29, `multi_way_synonyms` and `one_way_synonyms` continue to use the legacy collection-level synonym APIs.
+For Typesense v30 and newer, this gem stores those DSL synonyms in a collection-specific synonym set and attaches it automatically, while also supporting explicit `synonym_sets` / `curation_sets`.
 
 ### Working with Relationships
 
