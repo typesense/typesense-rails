@@ -80,6 +80,8 @@ module Typesense
     OPTIONS = [
       :multi_way_synonyms,
       :one_way_synonyms,
+      :synonym_sets,
+      :curation_sets,
       :predefined_fields,
       :fields,
       :default_sorting_field,
@@ -271,11 +273,13 @@ module Typesense
       "#{typesense_collection_name(options)}_#{Time.now.to_i}"
     end
 
-    def typesense_create_collection(collection_name, settings = nil)
+    def typesense_create_collection(collection_name, settings = nil, existing_collection: nil)
       fields = settings.get_setting(:predefined_fields) || settings.get_setting(:fields)
       default_sorting_field = settings.get_setting(:default_sorting_field)
       multi_way_synonyms = settings.get_setting(:multi_way_synonyms)
       one_way_synonyms = settings.get_setting(:one_way_synonyms)
+      synonym_sets = settings.get_setting(:synonym_sets)
+      curation_sets = settings.get_setting(:curation_sets)
       symbols_to_index = settings.get_setting(:symbols_to_index)
       token_separators = settings.get_setting(:token_separators)
       enable_nested_fields = settings.get_setting(:enable_nested_fields)
@@ -300,9 +304,14 @@ module Typesense
       )
       Typesense.log(:debug, "Collection '#{collection_name}' created!")
 
-      typesense_multi_way_synonyms(collection_name, multi_way_synonyms) if multi_way_synonyms
-
-      typesense_one_way_synonyms(collection_name, one_way_synonyms) if one_way_synonyms
+      apply_typesense_collection_resources(
+        collection_name,
+        multi_way_synonyms: multi_way_synonyms,
+        one_way_synonyms: one_way_synonyms,
+        synonym_sets: synonym_sets,
+        curation_sets: curation_sets,
+        existing_collection: existing_collection
+      )
     end
 
     def typesense_upsert_alias(collection_name, alias_name)
@@ -383,6 +392,103 @@ module Typesense
           )
         end
       end
+    end
+
+    def apply_typesense_collection_resources(collection_name, multi_way_synonyms: nil, one_way_synonyms: nil, synonym_sets: nil, curation_sets: nil, existing_collection: nil)
+      if typesense_server_major_version >= 30
+        apply_v30_collection_resources(
+          collection_name,
+          multi_way_synonyms: multi_way_synonyms,
+          one_way_synonyms: one_way_synonyms,
+          synonym_sets: synonym_sets,
+          curation_sets: curation_sets,
+          existing_collection: existing_collection
+        )
+      else
+        ensure_v30_resource_support!(synonym_sets, curation_sets)
+        typesense_multi_way_synonyms(collection_name, multi_way_synonyms) if multi_way_synonyms
+        typesense_one_way_synonyms(collection_name, one_way_synonyms) if one_way_synonyms
+      end
+    end
+
+    def apply_v30_collection_resources(collection_name, multi_way_synonyms: nil, one_way_synonyms: nil, synonym_sets: nil, curation_sets: nil, existing_collection: nil)
+      inline_synonyms_present = multi_way_synonyms || one_way_synonyms
+      attached_synonym_sets = Array(existing_collection && existing_collection["synonym_sets"]) + Array(synonym_sets)
+      attached_curation_sets = Array(existing_collection && existing_collection["curation_sets"]) + Array(curation_sets)
+
+      if inline_synonyms_present
+        synonym_set_name = default_synonym_set_name(collection_name)
+        ensure_synonym_set_exists(synonym_set_name)
+        upsert_synonym_set_items(synonym_set_name, multi_way_synonyms, one_way_synonyms)
+        attached_synonym_sets << synonym_set_name
+      end
+
+      collection_patch = {}
+      collection_patch["synonym_sets"] = attached_synonym_sets.uniq if attached_synonym_sets.any?
+      collection_patch["curation_sets"] = attached_curation_sets.uniq if attached_curation_sets.any?
+
+      return if collection_patch.empty?
+
+      typesense_client.collections[collection_name].update(collection_patch)
+    end
+
+    def ensure_v30_resource_support!(synonym_sets, curation_sets)
+      unsupported = []
+      unsupported << "synonym_sets" if synonym_sets
+      unsupported << "curation_sets" if curation_sets
+      return if unsupported.empty?
+
+      raise Typesense::BadConfiguration, "#{unsupported.join(' and ')} require Typesense v30.0 or newer"
+    end
+
+    def default_synonym_set_name(collection_name)
+      "#{collection_name}_synonyms_index"
+    end
+
+    def ensure_synonym_set_exists(synonym_set_name)
+      typesense_client.synonym_sets.upsert(synonym_set_name, { "items" => [] })
+    end
+
+    def upsert_synonym_set_items(synonym_set_name, multi_way_synonyms, one_way_synonyms)
+      items = []
+
+      Array(multi_way_synonyms).each do |synonym_hash|
+        synonym_hash.each do |synonym_name, synonym|
+          items << { "id" => synonym_name, "synonyms" => synonym }
+        end
+      end
+
+      Array(one_way_synonyms).each do |synonym_hash|
+        synonym_hash.each do |synonym_name, synonym|
+          items << synonym.merge("id" => synonym_name)
+        end
+      end
+
+      typesense_client.synonym_sets.upsert(synonym_set_name, { "items" => items })
+    end
+
+    def typesense_server_major_version
+      Typesense.server_major_version
+    end
+
+    def reset_typesense_server_major_version!
+      Typesense.reset_server_version_cache!
+    end
+
+    def typesense_debug_info
+      Typesense.debug_info
+    end
+
+    def typesense_collection_resources(collection_name)
+      return {} if typesense_server_major_version < 30
+
+      collection = typesense_get_collection(collection_name)
+      return {} unless collection
+
+      {
+        "synonym_sets" => Array(collection["synonym_sets"]),
+        "curation_sets" => Array(collection["curation_sets"])
+      }
     end
 
     def typesense(options = {}, &block)
@@ -528,8 +634,10 @@ module Typesense
       typesense_configurations.each do |options, settings|
         next if typesense_indexing_disabled?(options)
 
+        existing_collection_resources = {}
         begin
           master_index = typesense_ensure_init(options, settings, false)
+          existing_collection_resources = typesense_collection_resources(master_index[:alias_name])
           delete_collection(master_index[:alias_name])
         rescue ArgumentError
           @typesense_indexes[settings] = { collection_name: "", alias_name: typesense_collection_name(options) }
@@ -542,7 +650,7 @@ module Typesense
         tmp_options.delete(:per_environment) # already included in the temporary index_name
         tmp_settings = settings.dup
 
-        create_collection(src_index_name, settings)
+        create_collection(src_index_name, settings, existing_collection: existing_collection_resources)
 
         typesense_find_in_batches(batch_size) do |group|
           if typesense_conditional_index?(options)

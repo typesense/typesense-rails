@@ -52,3 +52,17 @@ def safe_index_list
   list = Typesense.client.collections.retrieve()
   list = list.select { |index| index["name"].include?(SAFE_INDEX_PREFIX) }
 end
+
+def typesense_version
+  Typesense.client.debug.retrieve["version"]
+rescue StandardError
+  nil
+end
+
+def typesense_v30_or_above?
+  version = typesense_version
+  return false unless version
+  return true if version == "nightly"
+
+  version.to_s[/\d+/].to_i >= 30
+end
