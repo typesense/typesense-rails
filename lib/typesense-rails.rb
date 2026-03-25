@@ -955,11 +955,11 @@ module Typesense
     def typesense_full_const_get(name)
       list = name.split("::")
       list.shift if list.first.blank?
-      obj = Object.const_defined?(:RUBY_VERSION) && RUBY_VERSION.to_f < 1.9 ? Object : self
+      obj = Object
       list.each do |x|
         # This is required because const_get tries to look for constants in the
         # ancestor chain, but we only want constants that are HERE
-        obj = obj.const_defined?(x) ? obj.const_get(x) : obj.const_missing(x)
+        obj = obj.const_defined?(x, false) ? obj.const_get(x, false) : obj.const_missing(x)
       end
       obj
     end

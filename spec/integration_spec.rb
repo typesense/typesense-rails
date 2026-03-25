@@ -73,6 +73,9 @@ ActiveRecord::Schema.define do
     t.string :short_name
     t.integer :hex
   end
+  create_table :collections do |t|
+    t.string :name
+  end
   create_table :namespaced_models do |t|
     t.string :name
     t.integer :another_private_value
@@ -209,6 +212,14 @@ class Color < ActiveRecord::Base
 
   def will_save_change_to_short_name?
     false
+  end
+end
+
+class Collection < ActiveRecord::Base
+  include Typesense
+
+  typesense auto_index: false, index_name: safe_index_name("Collection") do
+    attribute :name
   end
 end
 
@@ -639,6 +650,35 @@ describe "Namespaced::Model" do
     results = Namespaced::Model.search("*", "", { "filter_by" => "customAttr:45" })
     expect(results.size).to eq(1)
     expect(results[0].id).to eq(m.id)
+  end
+end
+
+describe "Collection" do
+  it "resolves the model class instead of Typesense::Collection" do
+    expect(Collection.typesense_options[:type]).to eq(Collection)
+  end
+
+  it "uses the ActiveRecord model when loading search hits" do
+    record = Collection.create!(name: "Archive")
+
+    allow(Collection).to receive(:typesense_raw_search).and_return(
+      {
+        "hits" => [
+          {
+            "document" => { "id" => record.id.to_s },
+            "highlights" => []
+          }
+        ],
+        "found" => 1,
+        "page" => 1,
+        "request_params" => { "per_page" => 10 }
+      }
+    )
+
+    results = Collection.search("*", "name")
+
+    expect(results.length).to eq(1)
+    expect(results.first).to eq(record)
   end
 end
 
