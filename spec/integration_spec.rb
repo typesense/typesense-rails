@@ -142,6 +142,9 @@ ActiveRecord::Schema.define do
   create_table :misconfigured_blocks do |t|
     t.string :name
   end
+  create_table :reindex_alias_probes do |t|
+    t.string :name
+  end
   if defined?(ActiveModel::Serializer)
     create_table :serialized_objects do |t|
       t.string :name
@@ -245,6 +248,14 @@ class DisabledSymbol < ActiveRecord::Base
 
   def self.truth
     true
+  end
+end
+
+class ReindexAliasProbe < ActiveRecord::Base
+  include Typesense
+
+  typesense auto_index: false, index_name: safe_index_name("ReindexAliasProbe") do
+    attribute :name
   end
 end
 
@@ -991,6 +1002,33 @@ describe "An imaginary store" do
       expect(Product.search("*", "", { "per_page" => Typesense::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n)
     end
 
+    it "does not delete the live alias target before swapping during reindex" do
+      alias_name = Product.index_name
+      old_collection_name = "#{alias_name}_old"
+      new_collection_name = "#{alias_name}_new"
+      previous_indexes = Product.instance_variable_get(:@typesense_indexes)
+
+      Product.instance_variable_set(:@typesense_indexes, {})
+
+      allow(Product).to receive(:get_collection).with(alias_name).and_return({ "name" => old_collection_name })
+      allow(Product).to receive(:typesense_collection_resources).with(alias_name).and_return({})
+      allow(Product).to receive(:collection_name_with_timestamp).and_return(new_collection_name)
+      allow(Product).to receive(:typesense_find_in_batches)
+
+      expect(Product).not_to receive(:delete_collection).with(alias_name)
+      expect(Product).to receive(:create_collection).with(
+        new_collection_name,
+        Product.typesense_settings,
+        existing_collection: {}
+      ).ordered
+      expect(Product).to receive(:upsert_alias).with(new_collection_name, alias_name).ordered
+      expect(Product).to receive(:delete_collection).with(old_collection_name).ordered
+
+      Product.reindex(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
+    ensure
+      Product.instance_variable_set(:@typesense_indexes, previous_indexes)
+    end
+
     it "should not return products that are not indexable" do
       @sekrit.index!
       @no_href.index!
@@ -1068,6 +1106,43 @@ describe "MongoObject" do
     expect { MongoObject.new.index! }.to raise_error(NameError)
     MongoObject.typesense_reindex!
     MongoObject.create(name: "mongo").typesense_index!
+  end
+end
+
+describe "ReindexAliasProbe" do
+  before(:each) do
+    ReindexAliasProbe.delete_all
+    ReindexAliasProbe.clear_index!
+  rescue StandardError
+    ArgumentError
+  ensure
+    ReindexAliasProbe.create!(name: "alpha")
+    ReindexAliasProbe.create!(name: "beta")
+    ReindexAliasProbe.reindex(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
+  end
+
+  after(:each) do
+    ReindexAliasProbe.delete_all
+    ReindexAliasProbe.clear_index!
+  rescue StandardError
+    ArgumentError
+  end
+
+  it "keeps the alias searchable while reindex builds the replacement collection" do
+    alias_name = ReindexAliasProbe.index_name
+    search_params = { q: "alpha", query_by: "name" }
+
+    expect(ReindexAliasProbe.typesense_client.collections[alias_name].documents.search(search_params)["found"]).to eq(1)
+
+    expect(ReindexAliasProbe).to receive(:create_collection).and_wrap_original do |original, *args, **kwargs|
+      expect(
+        ReindexAliasProbe.typesense_client.collections[alias_name].documents.search(search_params)["found"]
+      ).to eq(1)
+      original.call(*args, **kwargs)
+    end
+
+    ReindexAliasProbe.reindex(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
+    expect(ReindexAliasProbe.typesense_client.collections[alias_name].documents.search(search_params)["found"]).to eq(1)
   end
 end
 
