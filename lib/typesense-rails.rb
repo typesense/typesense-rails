@@ -270,7 +270,7 @@ module Typesense
     end
 
     def collection_name_with_timestamp(options)
-      "#{typesense_collection_name(options)}_#{Time.now.to_i}"
+      "#{typesense_collection_name(options)}_#{Time.now.to_i}_#{SecureRandom.hex(4)}"
     end
 
     def typesense_create_collection(collection_name, settings = nil, existing_collection: nil)
