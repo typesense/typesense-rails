@@ -635,10 +635,11 @@ module Typesense
         next if typesense_indexing_disabled?(options)
 
         existing_collection_resources = {}
+        old_collection_name = nil
         begin
           master_index = typesense_ensure_init(options, settings, false)
           existing_collection_resources = typesense_collection_resources(master_index[:alias_name])
-          delete_collection(master_index[:alias_name])
+          old_collection_name = master_index[:collection_name]
         rescue ArgumentError
           @typesense_indexes[settings] = { collection_name: "", alias_name: typesense_collection_name(options) }
           master_index = @typesense_indexes[settings]
@@ -665,6 +666,7 @@ module Typesense
         end
 
         upsert_alias(src_index_name, master_index[:alias_name])
+        delete_collection(old_collection_name) if old_collection_name.present? && old_collection_name != src_index_name
         master_index[:collection_name] = src_index_name
       end
       nil
