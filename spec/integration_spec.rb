@@ -991,6 +991,33 @@ describe "An imaginary store" do
       expect(Product.search("*", "", { "per_page" => Typesense::IndexSettings::DEFAULT_BATCH_SIZE }).size).to eq(n)
     end
 
+    it "does not delete the live alias target before swapping during reindex" do
+      alias_name = Product.index_name
+      old_collection_name = "#{alias_name}_old"
+      new_collection_name = "#{alias_name}_new"
+      previous_indexes = Product.instance_variable_get(:@typesense_indexes)
+
+      Product.instance_variable_set(:@typesense_indexes, {})
+
+      allow(Product).to receive(:get_collection).with(alias_name).and_return({ "name" => old_collection_name })
+      allow(Product).to receive(:typesense_collection_resources).with(alias_name).and_return({})
+      allow(Product).to receive(:collection_name_with_timestamp).and_return(new_collection_name)
+      allow(Product).to receive(:typesense_find_in_batches)
+
+      expect(Product).not_to receive(:delete_collection).with(alias_name)
+      expect(Product).to receive(:create_collection).with(
+        new_collection_name,
+        Product.typesense_settings,
+        existing_collection: {}
+      ).ordered
+      expect(Product).to receive(:upsert_alias).with(new_collection_name, alias_name).ordered
+      expect(Product).to receive(:delete_collection).with(old_collection_name).ordered
+
+      Product.reindex(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
+    ensure
+      Product.instance_variable_set(:@typesense_indexes, previous_indexes)
+    end
+
     it "should not return products that are not indexable" do
       @sekrit.index!
       @no_href.index!
