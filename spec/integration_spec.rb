@@ -142,6 +142,9 @@ ActiveRecord::Schema.define do
   create_table :misconfigured_blocks do |t|
     t.string :name
   end
+  create_table :reindex_alias_probes do |t|
+    t.string :name
+  end
   if defined?(ActiveModel::Serializer)
     create_table :serialized_objects do |t|
       t.string :name
@@ -245,6 +248,14 @@ class DisabledSymbol < ActiveRecord::Base
 
   def self.truth
     true
+  end
+end
+
+class ReindexAliasProbe < ActiveRecord::Base
+  include Typesense
+
+  typesense auto_index: false, index_name: safe_index_name("ReindexAliasProbe") do
+    attribute :name
   end
 end
 
@@ -1095,6 +1106,43 @@ describe "MongoObject" do
     expect { MongoObject.new.index! }.to raise_error(NameError)
     MongoObject.typesense_reindex!
     MongoObject.create(name: "mongo").typesense_index!
+  end
+end
+
+describe "ReindexAliasProbe" do
+  before(:each) do
+    ReindexAliasProbe.delete_all
+    ReindexAliasProbe.clear_index!
+  rescue StandardError
+    ArgumentError
+  ensure
+    ReindexAliasProbe.create!(name: "alpha")
+    ReindexAliasProbe.create!(name: "beta")
+    ReindexAliasProbe.reindex(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
+  end
+
+  after(:each) do
+    ReindexAliasProbe.delete_all
+    ReindexAliasProbe.clear_index!
+  rescue StandardError
+    ArgumentError
+  end
+
+  it "keeps the alias searchable while reindex builds the replacement collection" do
+    alias_name = ReindexAliasProbe.index_name
+    search_params = { q: "alpha", query_by: "name" }
+
+    expect(ReindexAliasProbe.typesense_client.collections[alias_name].documents.search(search_params)["found"]).to eq(1)
+
+    expect(ReindexAliasProbe).to receive(:create_collection).and_wrap_original do |original, *args, **kwargs|
+      expect(
+        ReindexAliasProbe.typesense_client.collections[alias_name].documents.search(search_params)["found"]
+      ).to eq(1)
+      original.call(*args, **kwargs)
+    end
+
+    ReindexAliasProbe.reindex(Typesense::IndexSettings::DEFAULT_BATCH_SIZE)
+    expect(ReindexAliasProbe.typesense_client.collections[alias_name].documents.search(search_params)["found"]).to eq(1)
   end
 end
 
